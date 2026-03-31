@@ -8,7 +8,7 @@ use App\Http\Requests\Api\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Models\OtpVerification;
-use App\Models\UserSession; 
+use App\Models\UserSession;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -22,10 +22,21 @@ class AuthController extends Controller
 {
     public function requestOtp(RequestOtpRequest $request)
     {
-        // 1. Generate OTP
+        // 1. SECURITY CHECK: Prevent OTP for unregistered users (Prevents SMS Waste)
+        if ($request->purpose === 'LOGIN') {
+            $userExists = User::where('phone', $request->phone)->exists();
+            if (!$userExists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Phone number not registered. Please complete registration first.'
+                ], 422); // 422 Unprocessable Entity (Validation Error)
+            }
+        }
+
+        // 2. Generate OTP
         $otp = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
 
-        // 2. Store in DB (Upsert)
+        // 3. Store in DB (Upsert)
         OtpVerification::updateOrCreate(
             [
                 'phone' => $request->phone,
@@ -46,7 +57,6 @@ class AuthController extends Controller
             'data' => [
                 'phone' => $request->phone,
                 'expires_in' => 300, // seconds
-                // REMOVE 'otp_code' IN PRODUCTION
                 'debug_otp' => $otp
             ]
         ]);
@@ -54,44 +64,42 @@ class AuthController extends Controller
 
     public function verifyOtp(VerifyOtpRequest $request)
     {
-        // 1. CLEAN INPUT (Remove spaces)
+        // 1. CLEAN INPUT
         $phone = trim($request->phone);
         $otpCode = trim($request->otp_code);
         $purpose = trim($request->purpose);
 
-        // 2. DIAGNOSTIC: Find the record by PHONE only first (Ignore code for a second)
-        // We want to see if a record exists at all.
+        // 2. CRITICAL CHECK: Does the user even exist?
+        $user = User::where('phone', $phone)->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found. This phone number is not registered. Please complete the registration process first.'
+            ], 422);
+        }
+
+        // 3. DIAGNOSTIC: Find the record by PHONE only first
         $candidateRecord = OtpVerification::where('phone', $phone)
             ->where('purpose', $purpose)
-            ->orderBy('created_at', 'desc') // Get the newest one
+            ->orderBy('created_at', 'desc')
             ->first();
 
-        // SCENARIO A: No record found for this phone/purpose at all
+        // 4. CHECKS
         if (!$candidateRecord) {
             return response()->json([
                 'success' => false,
-                'message' => 'No OTP found for this phone number and purpose.',
-                'debug' => [
-                    'searched_phone' => $phone,
-                    'searched_purpose' => $purpose
-                ]
+                'message' => 'No OTP request found for this phone. Please request an OTP first.'
             ], 404);
         }
 
-        // SCENARIO B: Record found, but let's check the code
         if ($candidateRecord->otp_code !== $otpCode) {
             return response()->json([
                 'success' => false,
-                'message' => 'OTP Code Mismatch.',
-                'debug' => [
-                    'you_sent' => $otpCode,
-                    'database_has' => $candidateRecord->otp_code,
-                    'hint' => 'Did you request a new OTP and try to use the old one?'
-                ]
+                'message' => 'Invalid OTP Code.'
             ], 401);
         }
 
-        // SCENARIO C: Record found, Code matches, check if used
         if ($candidateRecord->is_used) {
             return response()->json([
                 'success' => false,
@@ -99,80 +107,34 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // SCENARIO D: Record found, check Expiry
-        // We compare current time vs expiry time
-        $now = Carbon::now();
-        $expiresAt = Carbon::parse($candidateRecord->expires_at);
-
-        if ($now->gt($expiresAt)) {
+        if ($candidateRecord->expires_at < now()) {
             return response()->json([
                 'success' => false,
-                'message' => 'OTP Expired.',
-                'debug' => [
-                    'expired_at' => $expiresAt->toDateTimeString(),
-                    'current_time' => $now->toDateTimeString(),
-                    'seconds_late' => $now->diffInSeconds($expiresAt)
-                ]
+                'message' => 'OTP has expired.'
             ], 401);
         }
 
         // ============================================================
-        // IF WE REACH HERE, THE OTP IS 100% VALID. PROCEED.
+        // SUCCESSFUL LOGIN PATH
         // ============================================================
 
-        // 1. Mark OTP as used
+        // 1. Mark OTP Used
         $candidateRecord->update(['is_used' => true]);
 
-        // 2. Find or Create User (UUID FIX)
-        $user = User::where('phone', $phone)->first();
+        // 2. Update Login Time
+        $user->update(['last_login_at' => Carbon::now()]);
 
-        if (!$user) {
-            // 1. Generate UUID in PHP
-            $userId = (string) Str::uuid();
-
-            // 2. Create User passing the ID explicitly
-            $user = User::create([
-                'id' => $userId, // <--- THIS IS THE KEY FIX
-                'first_name' => 'New',       // <--- ADD THIS
-                'last_name' => 'User',
-                'phone' => $phone,
-                'role' => 'HOST',
-                'status' => 'ACTIVE',
-                'is_phone_verified' => true
-            ]);   if (!$user) {
-            $userId = (string) Str::uuid();
-            $user = User::create([
-                'id' => $userId,
-                'first_name' => 'New',
-                'last_name' => 'User',
-                'phone' => $phone,
-                'role' => 'HOST',
-                'status' => 'ACTIVE',
-                'is_phone_verified' => true
-            ]);
-
-            // ADD THIS: Sync with Spatie
-            $user->assignRole('HOST');
-        };
-        } else {
-            // ================= ADD THIS CHECK =================
-            if ($user->status !== 'ACTIVE') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access Denied: Your account is currently suspended. Please contact the administrator to reactivate it.'
-                ], 403); // 403 Forbidden
-            }
-            // =================================================
-
-            $user->update(['last_login_at' => Carbon::now()]);
+        // 3. PERFECT ROLE SYNC (Fixes "Guest" or Crash)
+        if (!$user->hasRole('HOST') && !$user->hasRole('SUPER_ADMIN')) {
+            $user->assignRole('HOST'); // Ensure they have the role they signed up with
         }
 
-        // 3. Create Token
+        // 4. Create Token
         $deviceName = $request->device_name ?? 'Unknown Device';
         $tokenResult = $user->createToken($deviceName);
         $plainTextToken = $tokenResult->plainTextToken;
 
-        // 4. Create Session
+        // 5. Create Session
         UserSession::create([
             'user_id' => $user->id,
             'access_token_hash' => hash('sha256', $plainTextToken),
@@ -181,7 +143,7 @@ class AuthController extends Controller
             'expires_at' => Carbon::now()->addWeek(),
         ]);
 
-        // 5. Success
+        // 6. Return Success
         return response()->json([
             'success' => true,
             'message' => 'Login successful',
