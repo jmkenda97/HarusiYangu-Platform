@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Support\Str; // <--- ADD THIS
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
@@ -16,6 +15,7 @@ class User extends Authenticatable
     protected $table = 'users';
     protected $primaryKey = 'id';
 
+    // UUID Configuration
     protected $keyType = 'string';
     public $incrementing = false;
 
@@ -30,13 +30,11 @@ class User extends Authenticatable
         'profile_photo_url',
         'role',
         'status',
-        'onboarding_completed', // <--- ADD THIS LINE
+        'onboarding_completed',
         'is_phone_verified',
         'is_email_verified',
         'last_login_at',
     ];
-
-
 
     protected $hidden = [
         'password_hash',
@@ -44,35 +42,63 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
-        'id' => 'string', // <--- ADD THIS
+        'id' => 'string',
         'last_login_at' => 'datetime',
         'is_phone_verified' => 'boolean',
         'is_email_verified' => 'boolean',
     ];
 
-
-    // SMART FIX: For Super Admin, trust the DB Column. For others, check Spatie.
+    // --- EXISTING AUTH LOGIC ---
     public function getRoleAttribute()
     {
-        // 1. If DB says Super Admin, immediately return it.
-        // This overrides Spatie to fix permission bugs.
         if (isset($this->attributes['role']) && $this->attributes['role'] === 'SUPER_ADMIN') {
             return 'SUPER_ADMIN';
         }
 
-        // 2. For everyone else, use Spatie Permission System
         $spatieRole = $this->hasRole('SUPER_ADMIN') ? 'SUPER_ADMIN' : ($this->hasRole('HOST') ? 'HOST' : null);
         if ($spatieRole) {
             return $spatieRole;
         }
 
-        // 3. Last Fallback: Check Database Column (Guests)
         return $this->attributes['role'] ?? 'GUEST';
     }
-
 
     public function getAuthPassword()
     {
         return $this->password_hash;
+    }
+
+    // --- PHASE 2 RELATIONSHIPS ---
+
+    /**
+     * A User can own multiple Events
+     */
+    public function ownedEvents()
+    {
+        return $this->hasMany(Event::class, 'owner_user_id');
+    }
+
+    /**
+     * A User can be a committee member in multiple Events
+     */
+    public function committeeMemberships()
+    {
+        return $this->hasMany(EventCommitteeMember::class, 'user_id');
+    }
+
+    /**
+     * Helper to get events where this user is a committee member
+     */
+    public function participatingEvents()
+    {
+        return $this->belongsToMany(Event::class, 'event_committee_members', 'user_id', 'event_id');
+    }
+
+    /**
+     * Payments recorded by this user (e.g., Treasurer)
+     */
+    public function recordedPayments()
+    {
+        return $this->hasMany(ContributionPayment::class, 'recorded_by');
     }
 }
