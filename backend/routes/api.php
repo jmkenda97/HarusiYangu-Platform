@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
+
 // Version 1 API Group
 Route::prefix('v1')->group(function () {
 
@@ -46,3 +47,6 @@ Route::prefix('v1')->group(function () {
         });
     });
 });
+
+
+

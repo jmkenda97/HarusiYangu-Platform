@@ -88,7 +88,6 @@ const DashboardLayout = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
 
                 {/* Top Header (Cleaned Up) */}
-                {/* Top Header */}
                 <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 shadow-sm z-10">
                     <div className="flex items-center">
                         <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-500 hover:text-slate-700">
@@ -110,9 +109,22 @@ const DashboardLayout = () => {
                                 <p className="text-sm font-semibold text-slate-900">{user?.full_name || 'User'}</p>
                                 <p className="text-xs text-slate-500">{user?.role || 'Guest'}</p>
                             </div>
-                            <div className="h-10 w-10 rounded-full bg-brand-100 border-2 border-brand-500 flex items-center justify-center text-brand-700 font-bold hover:bg-brand-200 transition-colors">
-                                {user?.first_name?.[0] || 'A'}
+                            
+                            {/* UPDATED AVATAR LOGIC: SHOW IMAGE IF EXISTS, ELSE FIRST LETTER */}
+                            <div className="h-10 w-10 rounded-full bg-brand-100 border-2 border-brand-500 flex items-center justify-center overflow-hidden hover:bg-brand-200 transition-colors">
+                                {user?.profile_photo_url ? (
+                                    <img 
+                                        src={user.profile_photo_url} 
+                                        alt="Profile" 
+                                        className="h-full w-full object-cover"
+                                    />
+                                ) : (
+                                    <span className="text-brand-700 font-bold">
+                                        {user?.first_name?.[0] || 'A'}
+                                    </span>
+                                )}
                             </div>
+                            
                             <ChevronDown size={16} className="text-slate-400 hidden sm:block" />
                         </button>
 

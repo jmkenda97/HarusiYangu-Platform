@@ -51,17 +51,22 @@ class User extends Authenticatable
     ];
 
 
-    // SMART FIX: Check Spatie first, then fall back to DB Column
+    // SMART FIX: For Super Admin, trust the DB Column. For others, check Spatie.
     public function getRoleAttribute()
     {
-        // 1. Check Spatie Permission System
-        $spatieRole = $this->roles->first()?->name;
+        // 1. If DB says Super Admin, immediately return it.
+        // This overrides Spatie to fix permission bugs.
+        if (isset($this->attributes['role']) && $this->attributes['role'] === 'SUPER_ADMIN') {
+            return 'SUPER_ADMIN';
+        }
+
+        // 2. For everyone else, use Spatie Permission System
+        $spatieRole = $this->hasRole('SUPER_ADMIN') ? 'SUPER_ADMIN' : ($this->hasRole('HOST') ? 'HOST' : null);
         if ($spatieRole) {
             return $spatieRole;
         }
 
-        // 2. Fallback: Check the Database Column directly
-        // Use $this->attributes['role'] to avoid calling the function again (infinite loop)
+        // 3. Last Fallback: Check Database Column (Guests)
         return $this->attributes['role'] ?? 'GUEST';
     }
 

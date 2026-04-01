@@ -124,10 +124,7 @@ class AuthController extends Controller
         // 2. Update Login Time
         $user->update(['last_login_at' => Carbon::now()]);
 
-        // 3. PERFECT ROLE SYNC (Fixes "Guest" or Crash)
-        if (!$user->hasRole('HOST') && !$user->hasRole('SUPER_ADMIN')) {
-            $user->assignRole('HOST'); // Ensure they have the role they signed up with
-        }
+     
 
         // 4. Create Token
         $deviceName = $request->device_name ?? 'Unknown Device';

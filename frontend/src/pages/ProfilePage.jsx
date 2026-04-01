@@ -11,9 +11,22 @@ const ProfilePage = () => {
 
                 <div className="px-8 pb-8 relative">
                     <div className="flex flex-col md:flex-row items-center md:items-end -mt-12 gap-6">
-                        <div className="h-24 w-24 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center text-3xl font-bold text-brand-600">
-                            {user?.first_name?.[0]}
+
+                        {/* MODIFIED AVATAR SECTION: Shows Image or Initials */}
+                        <div className="h-24 w-24 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center overflow-hidden relative">
+                            {user?.profile_photo_url ? (
+                                <img
+                                    src={user.profile_photo_url}
+                                    alt="Profile"
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <span className="text-3xl font-bold text-brand-600">
+                                    {user?.first_name?.[0]}
+                                </span>
+                            )}
                         </div>
+
                         <div className="text-center md:text-left flex-1">
                             <h2 className="text-2xl font-bold text-slate-900">{user?.full_name}</h2>
                             <p className="text-slate-500 flex items-center justify-center md:justify-start gap-2">
