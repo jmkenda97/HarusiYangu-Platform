@@ -6,8 +6,10 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\EventContributorController;
 use App\Http\Controllers\Api\EventPaymentController;
-
+use App\Http\Controllers\Api\EventContactController;
+use App\Http\Controllers\Api\EventBudgetController;
 use Illuminate\Support\Facades\Route;
+
 
 // Version 1 API Group
 Route::prefix('v1')->group(function () {
@@ -53,11 +55,15 @@ Route::prefix('v1')->group(function () {
             // Payments
             Route::post('/payments', [EventPaymentController::class, 'store']);
 
-            // Committee Members (Add to existing Event)
-            // We can add this here or use a separate controller, keeping it simple for now
-            // Route::post('/committee', [EventCommitteeController::class, 'store']);
+            // Guest List Management
+            Route::apiResource('contacts', EventContactController::class)->only(['index', 'store', 'update', 'destroy']);
+
+            //import guests
+            Route::get('/contacts/template', [EventContactController::class, 'downloadTemplate']);
+            Route::post('/contacts/import', [EventContactController::class, 'import']);
+
+            // Budget Management
+            Route::apiResource('budget', EventBudgetController::class)->only(['index', 'store', 'update', 'destroy']);
         });
-
     });
-
 });

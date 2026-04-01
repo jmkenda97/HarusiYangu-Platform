@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
 
 class EventController extends Controller
 {
-  
+
 
     /**
      * List Events based on User Role
@@ -48,6 +48,7 @@ class EventController extends Controller
      */
     public function store(Request $request)
     {
+        // ... (Validation remains the same) ...
         $request->validate([
             'event_name' => 'required|string|max:255',
             'event_type' => ['required', Rule::in(['KITCHEN_PARTY', 'SENDOFF', 'WEDDING', 'BAG_PARTY', 'BRIDAL_SHOWER', 'ENGAGEMENT', 'OTHER'])],
@@ -59,6 +60,9 @@ class EventController extends Controller
 
         try {
             $event = DB::transaction(function () use ($request) {
+                // DEBUG: Log the user ID attempting to create the event
+                \Log::info('Creating Event for User ID: ' . $request->user()->id);
+
                 $event = Event::create([
                     'id' => Str::uuid(),
                     'owner_user_id' => $request->user()->id,
@@ -68,11 +72,10 @@ class EventController extends Controller
                     'target_budget' => $request->target_budget,
                     'venue_name' => $request->venue_name,
                     'description' => $request->description,
-                    'event_status' => 'PLANNING', // Default status
+                    'event_status' => 'PLANNING',
                     'currency_code' => 'TZS',
                 ]);
 
-                // Automatically add the creator as a CHAIRPERSON in the committee
                 EventCommitteeMember::create([
                     'id' => Str::uuid(),
                     'event_id' => $event->id,
@@ -93,8 +96,11 @@ class EventController extends Controller
                 'message' => 'Event created successfully',
                 'data' => $event
             ], 201);
-
         } catch (\Exception $e) {
+            // DEBUG: Log the actual exception
+            \Log::error('Event Creation Failed: ' . $e->getMessage());
+            \Log::error('Stack Trace: ' . $e->getTraceAsString());
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create event: ' . $e->getMessage()
@@ -139,7 +145,7 @@ class EventController extends Controller
 
         // Basic Authorization check
         if ($event->owner_user_id !== auth()->id() && auth()->user()->role !== 'SUPER_ADMIN') {
-             return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+            return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
         }
 
         $request->validate([

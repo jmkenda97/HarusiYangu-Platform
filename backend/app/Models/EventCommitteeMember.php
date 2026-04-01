@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\User;
 
 class EventCommitteeMember extends Model
 {
@@ -16,6 +15,11 @@ class EventCommitteeMember extends Model
 
     protected $keyType = 'string';
     public $incrementing = false;
+
+    // --- ADD THIS LINE HERE ---
+    // This tells Laravel that this table does not have an 'updated_at' column
+    const UPDATED_AT = null;
+    // -------------------------
 
     protected $fillable = [
         'id',
@@ -37,8 +41,6 @@ class EventCommitteeMember extends Model
         'can_manage_vendors' => 'boolean',
         'can_scan_cards' => 'boolean',
     ];
-
-    // --- RELATIONSHIPS ---
 
     public function event(): BelongsTo
     {
