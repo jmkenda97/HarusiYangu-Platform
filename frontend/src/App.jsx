@@ -6,6 +6,8 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import UsersPage from './pages/UsersPage';
 import ProfilePage from './pages/ProfilePage';
+import EventsPage from './pages/EventsPage';      // <--- IMPORT
+import EventDetailsPage from './pages/EventDetailsPage'; // <--- IMPORT
 
 function App() {
   return (
@@ -20,6 +22,8 @@ function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="events" element={<EventsPage />} />
+            <Route path="events/:id" element={<EventDetailsPage />} />
           </Route>
         </Routes>
       </Router>
@@ -28,3 +32,5 @@ function App() {
 }
 
 export default App;
+
+

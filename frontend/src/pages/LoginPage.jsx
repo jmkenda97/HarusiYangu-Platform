@@ -148,7 +148,7 @@ const LoginPage = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-900 via-brand-800 to-brand-600 px-4 relative overflow-hidden">
+        <div className="min-h-screen flex items-center justify-center bg-white from-brand-900 via-brand-800 to-brand-600 px-4 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden opacity-20 pointer-events-none">
                 <div className="absolute -top-24 -left-24 w-96 h-96 bg-white rounded-full mix-blend-overlay filter blur-3xl animate-pulse"></div>
             </div>

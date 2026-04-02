@@ -1,22 +1,49 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, Settings, Calendar, Home } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { name: 'Events', icon: Calendar, path: '/events' },
     { name: 'Users', icon: Users, path: '/users' },
     { name: 'My Profile', icon: User, path: '/profile' },
 ];
 
 const DashboardLayout = () => {
+    const { user, logout } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [headerTitle, setHeaderTitle] = useState('Dashboard');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const location = useLocation();
-    const { user, logout } = useAuth();
     const dropdownRef = useRef(null);
 
-    // Close dropdown when clicking outside
+    // SIMPLE TITLE LOGIC
+    useEffect(() => {
+        // If a child page (EventDetails) changes the document.title, we use that.
+        // Otherwise, we use the path.
+        if (document.title !== 'HarusiYangu') {
+            setHeaderTitle(document.title);
+        } else {
+            // Clean URL names
+            const path = location.pathname;
+            if (path === '/dashboard') setHeaderTitle('Dashboard');
+            else if (path === '/events') setHeaderTitle('My Events');
+            else if (path === '/users') setHeaderTitle('User Management');
+            else if (path === '/profile') setHeaderTitle('My Profile');
+            // Handle Dynamic Event URL: /events/uuid -> Show "Event Details"
+            else if (path.match(/^\/events\/[a-f0-9-]+$/)) setHeaderTitle('Event Details');
+            else setHeaderTitle(path.replace('/', '').replace('/', ' ').replace(/\b\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1)));
+        }
+    }, [location]);
+
+    // Update title if document title changes (reactivity)
+    useEffect(() => {
+        if (document.title !== 'HarusiYangu') {
+            setHeaderTitle(document.title);
+        }
+    }, [document.title]);
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -84,7 +111,6 @@ const DashboardLayout = () => {
                 </nav>
             </aside>
 
-            {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
 
                 {/* Top Header (Cleaned Up) */}
@@ -93,9 +119,10 @@ const DashboardLayout = () => {
                         <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-500 hover:text-slate-700">
                             <Menu size={24} />
                         </button>
-                        {/* RESTORED: Page Title */}
-                        <h2 className="text-xl font-bold text-slate-800 ml-2 lg:ml-0 capitalize">
-                            {location.pathname.replace('/', '') || 'Dashboard'}
+                        
+                        {/* UPDATED: Use headerTitle state instead of raw pathname */}
+                        <h2 className="text-xl font-bold text-slate-800 ml-2 lg:ml-0">
+                            {headerTitle}
                         </h2>
                     </div>
 

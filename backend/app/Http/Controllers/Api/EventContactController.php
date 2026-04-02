@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\DB;
 use App\Exports\GuestsTemplateExport;
 use App\Imports\GuestsImport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\GuestsExport;
+
 
 class EventContactController extends Controller
 {
@@ -230,5 +232,24 @@ class EventContactController extends Controller
                 'message' => 'Failed to process file: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+
+// ... inside class ...
+
+    public function export($eventId)
+    {
+        $event = Event::findOrFail($eventId);
+
+        // Authorization
+        $user = request()->user();
+        $canManage = $event->owner_user_id === $user->id ||
+                     $event->committee()->where('user_id', $user->id)->exists();
+
+        if (!$canManage) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        return Excel::download(new GuestsExport($eventId), 'guest_list_' . $eventId . '.xlsx');
     }
 }
