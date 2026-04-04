@@ -21,7 +21,8 @@ class GuestsExport implements FromQuery, WithHeadings, WithMapping, ShouldAutoSi
     {
         return EventContact::query()
             ->where('event_id', $this->eventId)
-            ->with('pledge'); // Load pledge relation to see if they are contributors
+            ->with('pledge:id,contact_id,contribution_status,pledge_amount')
+            ->orderBy('created_at', 'desc');
     }
 
     public function headings(): array

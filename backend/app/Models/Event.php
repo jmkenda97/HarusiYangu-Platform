@@ -108,4 +108,8 @@ class Event extends Model
     {
         return (float) $this->payments()->where('payment_status', 'SUCCESS')->sum('amount');
     }
+
+    public function committeeMembers() {
+    return $this->hasMany(EventCommitteeMember::class, 'event_id');
+}
 }

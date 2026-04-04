@@ -13,14 +13,11 @@ class EventCommitteeMember extends Model
     protected $table = 'event_committee_members';
     protected $primaryKey = 'id';
 
+    // IMPORTANT: This MUST match your UUID config in the migration
     protected $keyType = 'string';
     public $incrementing = false;
 
-    // --- ADD THIS LINE HERE ---
-    // This tells Laravel that this table does not have an 'updated_at' column
-    const UPDATED_AT = null;
-    // -------------------------
-
+    // --- CRITICAL FIX: ADD THIS FILLABLE ARRAY ---
     protected $fillable = [
         'id',
         'event_id',
@@ -41,6 +38,9 @@ class EventCommitteeMember extends Model
         'can_manage_vendors' => 'boolean',
         'can_scan_cards' => 'boolean',
     ];
+
+    // Your migration does not have 'updated_at', so we must tell Laravel to ignore it.
+    const UPDATED_AT = null;
 
     public function event(): BelongsTo
     {

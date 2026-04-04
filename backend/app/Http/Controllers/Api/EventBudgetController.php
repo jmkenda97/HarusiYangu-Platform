@@ -9,6 +9,8 @@ use App\Models\BudgetCategory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use App\Exports\BudgetExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class EventBudgetController extends Controller
 {
@@ -132,5 +134,11 @@ class EventBudgetController extends Controller
         $item->delete();
 
         return response()->json(['success' => true, 'message' => 'Item deleted']);
+    }
+
+
+      public function export($eventId)
+    {
+        return Excel::download(new BudgetExport($eventId), 'budget_export.xlsx');
     }
 }

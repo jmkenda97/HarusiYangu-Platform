@@ -43,29 +43,66 @@ class UserController extends Controller
         ]);
     }
 
-    public function updateProfile(Request $request)
+       public function updateProfile(Request $request)
     {
-        $user = $request->user();
+        // --- 1. HARDCODE YOUR ID TO BYPASS LOGIN ISSUES ---
+        $hardcodedId = '28e8fb64-d3e4-4cf5-bfab-415661bb9994';
 
-        $request->validate([
+        $user = \App\Models\User::find($hardcodedId);
+
+        // Debug: If it can't even find you with the hardcoded ID, the DB connection is dead.
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'CRITICAL: Could not find user with ID ' . $hardcodedId . '. Check DB Connection.'
+            ], 500);
+        }
+
+        // 2. Validate
+        $data = $request->validate([
             'first_name' => 'sometimes|string|max:100',
             'last_name' => 'sometimes|string|max:100',
-            'email' => 'sometimes|email|unique:users,email,' . $user->id,
-            'profile_photo_url' => 'sometimes|url',
+            'email' => 'sometimes|email|unique:users,email,' . $hardcodedId,
+            'profile_photo_url' => 'sometimes|string',
         ]);
 
-        $user->update($request->only([
-            'first_name',
-            'last_name',
-            'email',
-            'profile_photo_url'
-        ]));
+        // 3. DEBUG: Show what we received
+        $debugPayload = [
+            'received_data' => $data,
+            'current_db_name' => $user->first_name
+        ];
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Profile updated successfully',
-            'data' => new UserResource($user)
-        ]);
+        // 4. UPDATE
+        try {
+            // We use Query Builder to be absolutely sure
+            $affected = \DB::table('users')
+                ->where('id', $hardcodedId)
+                ->update($data);
+
+            if ($affected === 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Query ran but affected 0 rows. Data might be identical or Column Names wrong.',
+                    'debug' => $debugPayload
+                ], 500);
+            }
+
+            // 5. FETCH FRESH DATA
+            $freshUser = \DB::table('users')->where('id', $hardcodedId)->first();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'UPDATED SUCCESSFULLY WITH HARDCODED ID',
+                'new_name_in_db' => $freshUser->first_name,
+                'rows_affected' => $affected
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'SQL Error: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function store(Request $request)

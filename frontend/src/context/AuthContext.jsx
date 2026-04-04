@@ -10,12 +10,16 @@ export const AuthProvider = ({ children }) => {
     // Check if user is logged in on app load
     useEffect(() => {
         const initAuth = async () => {
-            const token = localStorage.getItem('harusiyangu_token');
+                     const token = localStorage.getItem('harusiyangu_token');
             const storedUser = localStorage.getItem('harusiyangu_user');
 
-            if (token && storedUser) {
-                setUser(JSON.parse(storedUser));
-                // Optional: Verify token with backend here
+            if (token && storedUser && storedUser !== 'undefined') {
+                try {
+                    setUser(JSON.parse(storedUser));
+                } catch (e) {
+                    setUser(null); // If parsing fails, just set user to null
+                    localStorage.removeItem('harusiyangu_user'); // Remove bad data
+                }
             }
             setLoading(false);
         };
@@ -59,7 +63,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, logout }}>
+        <AuthContext.Provider value={{ user, loading, login, logout, setUser }}>
             {children}
         </AuthContext.Provider>
     );

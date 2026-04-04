@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\EventContributorController;
 use App\Http\Controllers\Api\EventPaymentController;
 use App\Http\Controllers\Api\EventContactController;
 use App\Http\Controllers\Api\EventBudgetController;
+use App\Http\Controllers\EventCommitteeController;
+
 use Illuminate\Support\Facades\Route;
 
 
@@ -45,9 +47,16 @@ Route::prefix('v1')->group(function () {
         // Event CRUD
         Route::apiResource('events', EventController::class);
 
-        // Nested Routes for Contributors & Payments
-        // URL Pattern: /api/v1/events/{event_id}/contributors
+        // Nested Routes for Contributors, Payments, Contacts, Budget, and Committee
+        // URL Pattern: /api/v1/events/{event_id}/...
         Route::prefix('events/{eventId}')->group(function () {
+
+            // --- COMMITTEE ROUTES (MOVED HERE FOR CONSISTENCY) ---
+            Route::get('/committee', [EventCommitteeController::class, 'index']);
+            Route::post('/committee', [EventCommitteeController::class, 'store']);
+            Route::put('/committee/{memberId}', [EventCommitteeController::class, 'update']);
+            Route::delete('/committee/{memberId}', [EventCommitteeController::class, 'destroy']);
+            Route::get('/committee/export', [EventCommitteeController::class, 'export']);
 
             // Contributors (Contacts + Pledges)
             Route::post('/contributors', [EventContributorController::class, 'store']);
@@ -58,9 +67,13 @@ Route::prefix('v1')->group(function () {
             // Guest List Management
             Route::apiResource('contacts', EventContactController::class)->only(['index', 'store', 'update', 'destroy']);
 
-            //import guests
+            // Import Guests
             Route::get('/contacts/template', [EventContactController::class, 'downloadTemplate']);
+            Route::get('/contacts/export', [EventContactController::class, 'export']);
             Route::post('/contacts/import', [EventContactController::class, 'import']);
+
+            Route::get('/contributors/export', [EventContributorController::class, 'export']);
+            Route::get('/budget/export', [EventBudgetController::class, 'export']);
 
             // Budget Management
             Route::apiResource('budget', EventBudgetController::class)->only(['index', 'store', 'update', 'destroy']);

@@ -2,17 +2,34 @@
 
 namespace App\Exports;
 
-use Maatwebsite\Excel\Concerns\FromArray;
+use Illuminate\Support\Collection;
+use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 
-class GuestsTemplateExport implements FromArray, WithHeadings
+class GuestsTemplateExport implements
+    FromCollection,
+    WithHeadings,
+    WithMapping,
+    WithColumnFormatting,
+    ShouldAutoSize
 {
-    // We return an empty array, or one sample row
-    public function array(): array
+    /**
+     * Sample Data
+     */
+    public function collection()
     {
-        return [
-            ['John Doe', '+255712345678', 'john@example.com', 'Friend', 'No']
-        ];
+        return collect([
+            [
+                'full_name' => 'John Doe',
+                'phone' => '+255712345678',
+                'email' => 'john@example.com',
+                'relationship' => 'Friend',
+                'is_vip' => 'No'
+            ]
+        ]);
     }
 
     public function headings(): array
@@ -21,8 +38,32 @@ class GuestsTemplateExport implements FromArray, WithHeadings
             'Full Name',
             'Phone',
             'Email',
-            'Relationship', // e.g. Aunt, Colleague
-            'Is VIP' // Yes or No
+            'Relationship',
+            'Is VIP'
+        ];
+    }
+
+    /**
+     * Map data to rows
+     */
+    public function map($row): array
+    {
+        return [
+            $row['full_name'],
+            (string) $row['phone'], // force string
+            $row['email'],
+            $row['relationship'],
+            $row['is_vip']
+        ];
+    }
+
+    /**
+     * Format columns
+     */
+    public function columnFormats(): array
+    {
+        return [
+            'B' => '@', // Phone column as text
         ];
     }
 }

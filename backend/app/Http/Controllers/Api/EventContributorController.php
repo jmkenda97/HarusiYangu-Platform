@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Exports\ContributorsExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class EventContributorController extends Controller
 {
@@ -99,5 +101,11 @@ class EventContributorController extends Controller
                 'message' => $e->getMessage()
             ], 400);
         }
+    }
+
+
+      public function export($eventId)
+    {
+        return Excel::download(new ContributorsExport($eventId), 'contributors_export.xlsx');
     }
 }
