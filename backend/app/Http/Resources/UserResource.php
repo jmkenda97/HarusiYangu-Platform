@@ -6,12 +6,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class UserResource extends JsonResource
 {
-    /**
-     * Transform the resource into an array.
-     *
-     * @return array<string, mixed>
-     */
-        public function toArray($request): array
+    public function toArray($request): array
     {
         return [
             'id' => $this->id,
@@ -23,12 +18,17 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'role' => $this->role,
             'status' => $this->status,
-            'onboarding_completed' => (bool) $this->onboarding_completed, // <--- ADD THIS
+            'onboarding_completed' => (bool) $this->onboarding_completed,
             'is_phone_verified' => (bool) $this->is_phone_verified,
             'profile_photo_url' => $this->profile_photo_url,
             'last_login_at' => $this->last_login_at ? $this->last_login_at->toDateTimeString() : null,
             'created_at' => $this->created_at ? $this->created_at->toDateTimeString() : null,
             'updated_at' => $this->updated_at ? $this->updated_at->toDateTimeString() : null,
+
+            // --- ADD THIS SECTION ---
+            'roles' => $this->roles->pluck('name'),
+            'permissions' => $this->getAllPermissions()->pluck('name'),
+            // ------------------------
         ];
     }
 }

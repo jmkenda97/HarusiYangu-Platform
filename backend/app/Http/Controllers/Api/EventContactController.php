@@ -16,8 +16,6 @@ use App\Exports\GuestsExport;
 
 class EventContactController extends Controller
 {
-
-
     /**
      * Get all guests/contacts for an event
      */
@@ -25,14 +23,8 @@ class EventContactController extends Controller
     {
         $event = Event::findOrFail($eventId);
 
-        // Authorization (Owner or Committee)
-        $user = $request->user();
-        $canManage = $event->owner_user_id === $user->id ||
-            $event->committee()->where('user_id', $user->id)->exists();
-
-        if (!$canManage) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
+        // --- CHANGE: Use Policy Check ---
+        $this->authorize('manageGuests', $event);
 
         // Load contacts. Load 'pledge' relation so we know if they are contributors
         $contacts = EventContact::where('event_id', $eventId)
@@ -54,13 +46,8 @@ class EventContactController extends Controller
         $event = Event::findOrFail($eventId);
         $user = $request->user();
 
-        // Authorization
-        $canManage = $event->owner_user_id === $user->id ||
-            $event->committee()->where('user_id', $user->id)->where('can_manage_contributions', true)->exists();
-
-        if (!$canManage) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
+        // --- CHANGE: Use Policy Check ---
+        $this->authorize('manageGuests', $event);
 
         $request->validate([
             'full_name' => 'required|string|max:255',
@@ -82,7 +69,7 @@ class EventContactController extends Controller
                     'relationship_label' => $request->relationship_label,
                     'is_vip' => $request->is_vip ?? false,
                     'is_invited' => $request->is_invited ?? true,
-                    'is_contributor' => false, // By default, just a guest
+                    'is_contributor' => false,
                     'created_by' => $user->id,
                 ]);
             });
@@ -92,7 +79,6 @@ class EventContactController extends Controller
                 'message' => 'Guest added successfully'
             ], 201);
         } catch (\Exception $e) {
-            // Handle Unique Constraint (Duplicate Phone)
             if (strpos($e->getMessage(), 'unique constraint') !== false) {
                 return response()->json([
                     'success' => false,
@@ -114,15 +100,8 @@ class EventContactController extends Controller
     {
         $contact = EventContact::where('id', $id)->where('event_id', $eventId)->firstOrFail();
 
-        // Authorization
-        $user = $request->user();
-        $event = $contact->event;
-        $canManage = $event->owner_user_id === $user->id ||
-            $event->committee()->where('user_id', $user->id)->exists();
-
-        if (!$canManage) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
+        // --- CHANGE: Use Policy Check ---
+        $this->authorize('manageGuests', $contact->event);
 
         $request->validate([
             'full_name' => 'sometimes|required|string|max:255',
@@ -149,19 +128,9 @@ class EventContactController extends Controller
     {
         $contact = EventContact::where('id', $id)->where('event_id', $eventId)->firstOrFail();
 
-        // Authorization
-        $user = $request->user();
-        $event = $contact->event;
-        $canManage = $event->owner_user_id === $user->id ||
-            $event->committee()->where('user_id', $user->id)->exists();
+        // --- CHANGE: Use Policy Check ---
+        $this->authorize('manageGuests', $contact->event);
 
-        if (!$canManage) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-
-        // Note: Deleting a contact might Cascade delete the pledge if configured in DB,
-        // or throw an error if they have a pledge.
-        // For Phase 2, let's prevent deletion if they have a pledge to be safe.
         if ($contact->pledge) {
             return response()->json([
                 'success' => false,
@@ -177,10 +146,6 @@ class EventContactController extends Controller
         ]);
     }
 
-
-
-// ... inside the class ...
-
     /**
      * Download the Excel Template
      */
@@ -194,27 +159,17 @@ class EventContactController extends Controller
      */
     public function import(Request $request, $eventId)
     {
-        // Validate File
         $request->validate([
-            'file' => 'required|mimes:xlsx,csv,xls|max:10240' // Max 10MB
+            'file' => 'required|mimes:xlsx,csv,xls|max:10240'
         ]);
 
         $event = Event::findOrFail($eventId);
 
-        // Authorization
-        $user = $request->user();
-        $canManage = $event->owner_user_id === $user->id ||
-            $event->committee()->where('user_id', $user->id)->exists();
-
-        if (!$canManage) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
+        // --- CHANGE: Use Policy Check ---
+        $this->authorize('manageGuests', $event);
 
         try {
-            // Initialize Import Class with Event ID
             $import = new GuestsImport($eventId);
-
-            // Process the file
             Excel::import($import, $request->file('file'));
 
             return response()->json([
@@ -234,21 +189,12 @@ class EventContactController extends Controller
         }
     }
 
-
-// ... inside class ...
-
     public function export($eventId)
     {
         $event = Event::findOrFail($eventId);
 
-        // Authorization
-        $user = request()->user();
-        $canManage = $event->owner_user_id === $user->id ||
-                     $event->committee()->where('user_id', $user->id)->exists();
-
-        if (!$canManage) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
+        // --- CHANGE: Use Policy Check ---
+        $this->authorize('manageGuests', $event);
 
         return Excel::download(new GuestsExport($eventId), 'guest_list_' . $eventId . '.xlsx');
     }

@@ -13,23 +13,15 @@ use Illuminate\Validation\Rule;
 
 class EventPaymentController extends Controller
 {
-
     /**
      * Record a Contribution Payment
-     * This triggers the Database Triggers (update_pledge_payment_totals, update_event_wallet_after_contribution)
      */
     public function store(Request $request, $eventId)
     {
         $event = Event::findOrFail($eventId);
 
-        // Authorization
-        $user = $request->user();
-        $canManage = $event->owner_user_id === $user->id ||
-            $event->committee()->where('user_id', $user->id)->where('can_manage_contributions', true)->exists();
-
-        if (!$canManage) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
+        // --- CHANGE: Use Policy Check ---
+        $this->authorize('manageContributions', $event);
 
         $request->validate([
             'pledge_id' => 'required|uuid|exists:contribution_pledges,id',
@@ -47,7 +39,6 @@ class EventPaymentController extends Controller
             DB::transaction(function () use ($request, $event, $pledge, $user) {
                 $receipt = 'REC-' . strtoupper(Str::random(8));
 
-                // FIX: Explicitly cast IDs to String to prevent UUID/Integer mismatch errors
                 ContributionPayment::create([
                     'id' => Str::uuid(),
                     'event_id' => (string) $event->id,
@@ -61,7 +52,7 @@ class EventPaymentController extends Controller
                     'paid_at' => now(),
                     'confirmed_at' => now(),
                     'notes' => $request->notes,
-                    'recorded_by' => (string) $user->id, // <--- CRITICAL FIX
+                    'recorded_by' => (string) auth()->id(),
                 ]);
             });
 
@@ -70,7 +61,6 @@ class EventPaymentController extends Controller
                 'message' => 'Payment recorded successfully. Balances updated.'
             ], 201);
         } catch (\Exception $e) {
-            // Log for debugging
             \Log::error('Payment Error: ' . $e->getMessage());
 
             return response()->json([

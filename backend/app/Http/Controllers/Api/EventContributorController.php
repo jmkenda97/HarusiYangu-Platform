@@ -15,8 +15,6 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class EventContributorController extends Controller
 {
-
-
     /**
      * Add a new Contact and Pledge to an Event
      */
@@ -25,16 +23,13 @@ class EventContributorController extends Controller
         $event = Event::findOrFail($eventId);
 
         $user = $request->user();
-        $canManage = $event->owner_user_id === $user->id ||
-            $event->committee()->where('user_id', $user->id)->where('can_manage_contributions', true)->exists();
 
-        if (!$canManage) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
+        // --- CHANGE: Use Policy Check ---
+        $this->authorize('manageContributions', $event);
 
-        // UPDATED VALIDATION: We allow 'contact_id' to be passed if converting a guest
+        // UPDATED VALIDATION
         $request->validate([
-            'contact_id' => 'nullable|uuid|exists:event_contacts,id', // <--- NEW
+            'contact_id' => 'nullable|uuid|exists:event_contacts,id',
             'full_name' => 'required_without:contact_id|string|max:255',
             'phone' => 'required_without:contact_id|string|max:20',
             'email' => 'nullable|string|max:255',
@@ -48,23 +43,19 @@ class EventContributorController extends Controller
 
                 // LOGIC: If contact_id is provided, use existing guest. Otherwise, create new.
                 if ($request->contact_id) {
-                    // Use existing guest
                     $contact = EventContact::where('id', $request->contact_id)
                         ->where('event_id', $event->id)
                         ->firstOrFail();
 
-                    // Check if they already have a pledge
                     if ($contact->pledge) {
                         throw new \Exception("This guest already has an active pledge.");
                     }
 
                     $contactId = $contact->id;
-                    // Optional: Update their VIP status if changed
                     if ($request->has('is_vip')) {
                         $contact->update(['is_vip' => $request->is_vip]);
                     }
                 } else {
-                    // Create new contact (Original flow)
                     $contact = EventContact::create([
                         'id' => Str::uuid(),
                         'event_id' => $event->id,
@@ -78,7 +69,6 @@ class EventContributorController extends Controller
                     $contactId = $contact->id;
                 }
 
-                // Create Pledge
                 ContributionPledge::create([
                     'id' => Str::uuid(),
                     'event_id' => $event->id,
@@ -103,9 +93,11 @@ class EventContributorController extends Controller
         }
     }
 
-
-      public function export($eventId)
+    public function export($eventId)
     {
+        // Authorization handled by middleware or explicit check if needed
+        // Assuming you want anyone who can see contributors to export
+        // If strict, add: $this->authorize('manageContributions', Event::findOrFail($eventId));
         return Excel::download(new ContributorsExport($eventId), 'contributors_export.xlsx');
     }
 }

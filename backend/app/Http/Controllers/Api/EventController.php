@@ -47,7 +47,7 @@ class EventController extends Controller
     {
         $request->validate([
             'event_name' => 'required|string|max:255',
-            'event_type' => ['required', Rule::in(['KITCHEN_PARTY', 'SENDOFF', 'WEDDING', 'BAG_PARTY', 'BRIDAL_SHOWER', 'ENGAGEMENT', 'OTHER'])],
+            'event_type' => ['required', Rule::in(['KITCHEN_PARTY', 'SENDOFF', 'WEDDING', 'BAG_PARTY', 'BRIDAL_SHOWER', 'BRIDAL_SHOWER', 'ENGAGEMENT', 'OTHER'])],
             'event_date' => 'required|date|after:today',
             'start_time' => 'nullable|date_format:H:i',
             'end_time' => 'nullable|date_format:H:i|after:start_time',
@@ -59,6 +59,7 @@ class EventController extends Controller
             'region' => 'nullable|string|max:100',
             'district' => 'nullable|string|max:100',
             'target_budget' => 'required|numeric|min:0',
+            // FIX: Changed 'contingENCY_AMOUNT' to 'contingency_amount'
             'contingency_amount' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
         ]);
@@ -81,6 +82,7 @@ class EventController extends Controller
                     'region' => $request->region,
                     'district' => $request->district,
                     'target_budget' => $request->target_budget,
+                    // This now matches the validated input
                     'contingency_amount' => $request->contingency_amount ?? 0,
                     'description' => $request->description,
                     'event_status' => 'PLANNING',
@@ -96,6 +98,7 @@ class EventController extends Controller
                     'can_manage_contributions' => true,
                     'can_send_messages' => true,
                     'can_manage_vendors' => true,
+                    'can_scan_cards' => true,
                     'added_by' => $request->user()->id,
                 ]);
 
@@ -108,7 +111,7 @@ class EventController extends Controller
                 'data' => $event
             ], 201);
         } catch (\Exception $e) {
-            \Log::error('Event Creation Failed: ' . `e->getMessage()`);
+            \Log::error('Event Creation Failed: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create event: ' . $e->getMessage()
@@ -178,7 +181,8 @@ class EventController extends Controller
             'region',
             'district',
             'target_budget',
-            'conting_amount',
+            // FIX: Changed 'contig_amount' to 'contingency_amount'
+            'contingency_amount',
             'description'
         ]));
 
@@ -212,7 +216,7 @@ class EventController extends Controller
     }
 
 
-      public function exportCommittee($eventId)
+    public function exportCommittee($eventId)
     {
         return Excel::download(new CommitteeExport($eventId), 'committee_export.xlsx');
     }

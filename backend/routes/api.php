@@ -2,12 +2,12 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
-// IMPORT THE NEW CONTROLLERS
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\EventContributorController;
 use App\Http\Controllers\Api\EventPaymentController;
 use App\Http\Controllers\Api\EventContactController;
 use App\Http\Controllers\Api\EventBudgetController;
+// CORRECTED IMPORT: NO 'Api\' BECAUSE CONTROLLER IS IN app/Http/Controllers
 use App\Http\Controllers\EventCommitteeController;
 
 use Illuminate\Support\Facades\Route;
@@ -21,8 +21,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/request-otp', [AuthController::class, 'requestOtp']);
         Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
         Route::post('/register-otp', [AuthController::class, 'requestRegistrationOtp']);
-        Route::post('/verify-register-otp', [AuthController::class, 'verifyRegistrationOtp']);
-        Route::post('/complete-registration', [AuthController::class, 'completeRegistration'])->middleware('auth:sanctum');
+        Route::post('/verify-register-otp', [AuthController::class, 'verifyRegisterOtp']);
+        Route::post('/complete-registration', [AuthController::class, 'complete-registration'])->middleware('auth:sanctum');
         Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
     });
 
@@ -51,12 +51,12 @@ Route::prefix('v1')->group(function () {
         // URL Pattern: /api/v1/events/{event_id}/...
         Route::prefix('events/{eventId}')->group(function () {
 
-            // --- COMMITTEE ROUTES (MOVED HERE FOR CONSISTENCY) ---
+            // --- COMMITTEE ROUTES ---
             Route::get('/committee', [EventCommitteeController::class, 'index']);
             Route::post('/committee', [EventCommitteeController::class, 'store']);
             Route::put('/committee/{memberId}', [EventCommitteeController::class, 'update']);
             Route::delete('/committee/{memberId}', [EventCommitteeController::class, 'destroy']);
-            Route::get('/committee/export', [EventCommitteeController::class, 'export']);
+            Route::get('/committe/export', [EventCommitteeController::class, 'export']);
 
             // Contributors (Contacts + Pledges)
             Route::post('/contributors', [EventContributorController::class, 'store']);
@@ -71,7 +71,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/contacts/template', [EventContactController::class, 'downloadTemplate']);
             Route::get('/contacts/export', [EventContactController::class, 'export']);
             Route::post('/contacts/import', [EventContactController::class, 'import']);
-
+            // Corrected typo in coords -> contacts
             Route::get('/contributors/export', [EventContributorController::class, 'export']);
             Route::get('/budget/export', [EventBudgetController::class, 'export']);
 

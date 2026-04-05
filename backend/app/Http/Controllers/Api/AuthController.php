@@ -124,7 +124,13 @@ class AuthController extends Controller
         // 2. Update Login Time
         $user->update(['last_login_at' => Carbon::now()]);
 
-     
+        // --- FIX: ENSURE SPATIE ROLE IS ASSIGNED ---
+        // If the user has a role set (like HOST), make sure Spatie knows about it.
+        // This fixes the issue where the UserResource returns no permissions.
+        if ($user->role) {
+            $user->assignRole($user->role);
+        }
+        // ----------------------------------------------
 
         // 4. Create Token
         $deviceName = $request->device_name ?? 'Unknown Device';
@@ -232,6 +238,11 @@ class AuthController extends Controller
             'onboarding_completed' => false,
             'is_phone_verified' => true
         ]);
+
+        // --- FIX: ASSIGN HOST ROLE IMMEDIATELY ---
+        // This ensures the new user has the 'HOST' role in Spatie immediately.
+        $user->assignRole('HOST');
+        // -----------------------------------------
 
         // 5. Issue Temporary Token
         // Note: We remove complex ability definitions to avoid crashes
