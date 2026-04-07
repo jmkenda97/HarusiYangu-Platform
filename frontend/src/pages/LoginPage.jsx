@@ -5,19 +5,17 @@ import api from '../api/axios';
 import { Lock, Phone, ArrowRight, RefreshCw, User, Mail, Image, Check, X as CloseIcon, Shield, CreditCard, Users, Menu, ChevronRight, ChevronLeft, Zap, Globe, Clock } from 'lucide-react';
 
 // --- 1. IMAGE CONFIGURATION ---
-// Make sure MARRIAGE.jpg is inside your 'public' folder!
 const ASSETS = {
-    // The Hero Image you requested
-    hero: "/MARRIAGE.jpg", 
+    // The Hero Image: Updated to use your local WEDDING1.webp
+    hero: "/WEDDING1.webp", 
     
-    // Celebration Slider Images (Replace these URLs with your local files later)
-    // Just change the string inside quotes to e.g., "/harusi.jpg"
+    // Celebration Slider Images: Updated to use your local files
     celebrations: [
-        { title: "Harusi (Wedding)", desc: "The grand celebration of your union. Manage everything from invites to the reception.", img: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80" },
-        { title: "Kitchen Party", desc: "Organize the kitchen party budget and committee activities with precision.", img: "https://images.unsplash.com/photo-1520342868574-5fa3804e551c?auto=format&fit=crop&w=1200&q=80" },
-        { title: "Sendoff", desc: "Coordinate the sendoff budget and committee activities with precision.", img: "https://images.unsplash.com/photo-1511285560982-1351cdeb9821?auto=format&fit=crop&w=1200&q=80" },
-        { title: "Bag Party", desc: "Organize intimate gatherings and contributions efficiently.", img: "https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?auto=format&fit=crop&w=1200&q=80" },
-        { title: "Bridal Shower", desc: "Elegant planning tools for the perfect pre-wedding celebration.", img: "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&w=1200&q=80" }
+        { title: "Harusi (Wedding)", desc: "The grand celebration of your union. Manage everything from invites to the reception.", img: "/WEDDING1.webp" },
+        { title: "Kitchen Party", desc: "Organize the kitchen party budget and committee activities with precision.", img: "/KITCHENPARTY.webp" },
+        { title: "Sendoff", desc: "Coordinate the sendoff budget and committee activities with precision.", img: "/SENDOFF.webp" },
+        { title: "Bag Party", desc: "Organize intimate gatherings and contributions efficiently.", img: "/BAGPACK.webp" },
+        { title: "Bridal Shower", desc: "Elegant planning tools for the perfect pre-wedding celebration.", img: "/BRIDALSHOWER.webp" }
     ]
 };
 
@@ -178,7 +176,7 @@ const LandingPage = () => {
                         </div>
                     </div>
                     <div className="relative lg:h-[600px] w-full rounded-2xl overflow-hidden shadow-2xl animate-scale-in">
-                        {/* HERO IMAGE: Uses the local file you requested */}
+                        {/* HERO IMAGE: Uses the local file WEDDING1.webp */}
                         <img src={ASSETS.hero} alt="Wedding Setup" className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/20 to-transparent"></div>
                     </div>
@@ -209,7 +207,7 @@ const LandingPage = () => {
                 </div>
             </section>
 
-            {/* --- CELEBRATION SLIDER (NEW) --- */}
+            {/* --- CELEBRATION SLIDER (UPDATED WITH LOCAL IMAGES) --- */}
             <section id="celebrations" className="py-24 px-6 bg-slate-50 overflow-hidden">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-16">

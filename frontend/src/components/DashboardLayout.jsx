@@ -1,25 +1,22 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, Settings, Calendar, Home } from 'lucide-react';
+import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, Settings, Calendar, Home, PanelLeftClose, PanelLeftOpen, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext'; // Import useTheme
 
 const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { name: 'My Events', icon: Calendar, path: '/events' },
-    // ADDED: My Profile Link in Sidebar below My Events
     { name: 'My Profile', icon: User, path: '/profile' },
     { name: 'Users', icon: Users, path: '/users' },
 ];
 
-const DashboardLayout = () => {
-    const { user, logout } = useAuth();
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [headerTitle, setHeaderTitle] = useState('Dashboard');
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggleDesktopCollapse }) => {
+    const { user } = useAuth();
     const location = useLocation();
-    const dropdownRef = useRef(null);
 
     // SIMPLE TITLE LOGIC
+    const [headerTitle, setHeaderTitle] = useState('Dashboard');
     useEffect(() => {
         if (document.title !== 'HarusiYangu') {
             setHeaderTitle(document.title);
@@ -34,12 +31,67 @@ const DashboardLayout = () => {
         }
     }, [location]);
 
-    // Update title if document title changes
-    useEffect(() => {
-        if (document.title !== 'HarusiYangu') {
-            setHeaderTitle(document.title);
-        }
-    }, [document.title]);
+    return (
+        <>
+            {/* Sidebar Header with Logo & Collapse Toggle ONLY */}
+            <div className={`flex items-center justify-between h-16 bg-white dark:bg-slate-900 shadow-md border-b border-slate-200 dark:border-slate-800 ${isDesktopCollapsed ? 'px-2' : 'px-6'}`}>
+                {!isDesktopCollapsed && <span className="text-xl font-bold tracking-wider text-brand-600 dark:text-brand-400 whitespace-nowrap">HARUSIANGU</span>}
+                
+                {/* Only Collapse Toggle remains here */}
+                <button 
+                    onClick={toggleDesktopCollapse} 
+                    className="hidden lg:block p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    title={isDesktopCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                >
+                    {isDesktopCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+                </button>
+            </div>
+
+            <nav className={`mt-6 ${isDesktopCollapsed ? 'px-2' : 'px-4'} space-y-2`}>
+                {menuItems.map((item) => {
+                    if (item.name === 'Users' && user?.role !== 'SUPER_ADMIN') return null;
+                    if (item.name === 'My Profile' && user?.role !== 'HOST') return null;
+
+                    const Icon = item.icon;
+                    const isActive = location.pathname === item.path;
+
+                    return (
+                        <Link
+                            key={item.path}
+                            to={item.path}
+                            onClick={() => setSidebarOpen(false)}
+                            title={isDesktopCollapsed ? item.name : ''}
+                            className={`
+                                flex items-center ${isDesktopCollapsed ? 'justify-center px-2' : 'px-4'} py-3 text-sm font-medium rounded-lg transition-colors duration-200 group relative
+                                ${isActive
+                                    ? 'bg-brand-600 text-white shadow-lg shadow-brand-900/50'
+                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                                }
+                            `}
+                        >
+                            <Icon size={20} className={isDesktopCollapsed ? '' : 'mr-3'} />
+                            {!isDesktopCollapsed && (
+                                <>
+                                    {item.name}
+                                    {isActive && <ChevronRight size={16} className="ml-auto" />}
+                                </>
+                            )}
+                        </Link>
+                    );
+                })}
+            </nav>
+        </>
+    );
+}
+
+const DashboardLayout = () => {
+    const { user, logout } = useAuth();
+    const { theme, toggleTheme } = useTheme(); // Get theme functions
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
+    const location = useLocation();
+    const dropdownRef = useRef(null);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -57,154 +109,109 @@ const DashboardLayout = () => {
     };
 
     return (
-        <div className="flex h-screen bg-slate-50">
-
+        // REMOVED ThemeProvider wrapper here because it is now in App.jsx
+        <div className="flex h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
             {/* Mobile Overlay */}
             {sidebarOpen && (
                 <div
-                    className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden"
+                    className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden backdrop-blur-sm"
                     onClick={() => setSidebarOpen(false)}
                 ></div>
             )}
 
-            {/* Sidebar */}
+            {/* Sidebar - Updated to support Light/Dark */}
             <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
-                {/* Logo Section in Sidebar */}
-                <div className="flex items-center justify-center h-16 bg-slate-950 shadow-md border-b border-slate-800">
-                    <span className="text-xl font-bold tracking-wider text-brand-400">HARUSIANGU</span>
-                </div>
-
-                <nav className="mt-6 px-4 space-y-2">
-                    {menuItems.map((item) => {
-                        // SECURITY CHECK 1: Hide Users from everyone except SUPER_ADMIN
-                        if (item.name === 'Users' && user?.role !== 'SUPER_ADMIN') {
-                            return null;
-                        }
-
-                        // SECURITY CHECK 2: Hide My Profile from everyone except HOST
-                        if (item.name === 'My Profile' && user?.role !== 'HOST') {
-                            return null;
-                        }
-
-                        const Icon = item.icon;
-                        const isActive = location.pathname === item.path;
-
-                        return (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                onClick={() => setSidebarOpen(false)}
-                                className={`
-                  flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200
-                  ${isActive
-                                    ? 'bg-brand-600 text-white shadow-lg shadow-brand-900/50'
-                                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                                }
-                `}
-                            >
-                                <Icon size={20} className="mr-3" />
-                                {item.name}
-                                {isActive && <ChevronRight size={16} className="ml-auto" />}
-                            </Link>
-                        );
-                    })}
-                </nav>
+                fixed inset-y-0 left-0 z-50 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 flex flex-col
+                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                ${isDesktopCollapsed ? 'lg:w-20' : 'lg:w-64'}
+                w-64
+            `}>
+                <SidebarContent 
+                    sidebarOpen={sidebarOpen} 
+                    setSidebarOpen={setSidebarOpen} 
+                    isDesktopCollapsed={isDesktopCollapsed}
+                    toggleDesktopCollapse={() => setIsDesktopCollapsed(!isDesktopCollapsed)}
+                />
             </aside>
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-
-                {/* Top Header (Cleaned Up) */}
-                <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 shadow-sm z-10">
+            <div className="flex-1 flex flex-col overflow-hidden transition-all duration-300">
+                {/* Top Header */}
+                <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 h-16 flex items-center justify-between px-6 shadow-sm z-10 transition-colors duration-300">
                     <div className="flex items-center">
-                        <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-500 hover:text-slate-700">
+                        <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
                             <Menu size={24} />
                         </button>
-                        
-                        {/* UPDATED: Use headerTitle state instead of raw pathname */}
-                        <h2 className="text-xl font-bold text-slate-800 ml-2 lg:ml-0">
-                            {headerTitle}
+                        <h2 className="text-xl font-bold text-slate-800 dark:text-white ml-2 lg:ml-0">
+                            {document.title !== 'HarusiYangu' ? document.title : 
+                                location.pathname === '/dashboard' ? 'Dashboard' : 
+                                location.pathname === '/events' ? 'My Events' : 'Dashboard'}
                         </h2>
                     </div>
 
-                    {/* User Profile Dropdown */}
-                    <div className="relative" ref={dropdownRef}>
-                        <button
-                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                            className="flex items-center gap-3 focus:outline-none"
+                    {/* RIGHT SIDE: Theme Toggle & Profile */}
+                    <div className="flex items-center gap-4">
+                        
+                        {/* --- THEME TOGGLE BUTTON (MOVED HERE) --- */}
+                        <button 
+                            onClick={toggleTheme} 
+                            className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors focus:outline-none"
+                            title="Toggle Theme"
                         >
-                            <div className="text-right hidden sm:block">
-                                <p className="text-sm font-semibold text-s2xl font-slate-900">{user?.full_name || 'User'}</p>
-                                <p className="text-xs text-slate-500">{user?.role || 'Guest'}</p>
-                            </div>
-                            
-                            {/* UPDATED AVATAR LOGIC: SHOW IMAGE IF EXISTS, ELSE FIRST LETTER */}
-                            <div className="h-10 w-10 rounded-full bg-brand-100 border-2 border-brand-500 flex items-center justify-center overflow-hidden hover:bg-brand-200 transition-colors">
-                                {user?.profile_photo_url ? (
-                                    <img 
-                                        src={user.profile_photo_url} 
-                                        alt="Profile" 
-                                        className="h-full w-full object-cover"
-                                    />
-                                ) : (
-                                    <span className="text-brand-700 font-bold">
-                                        {user?.first_name?.[0] || 'A'}
-                                    </span>
-                                )}
-                            </div>
-                            
-                            <ChevronDown size={16} className="text-slate-400 hidden sm:block" />
+                            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
                         </button>
 
-                        {/* Dropdown Menu */}
-                        {isDropdownOpen && (
-                            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-slate-100 py-2 animate-in fade-in slide-in-from-top-5 duration-200">
-                                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 rounded-t-xl">
-                                    <p className="text-sm font-bold text-slate-900">{user?.full_name}</p>
-                                    <p className="text-xs text-slate-500">{user?.email || user?.phone}</p>
-                                    <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded bg-brand-100 text-brand-700 uppercase">
-                                        {user?.role}
-                                    </span>
+                        {/* User Profile Dropdown */}
+                        <div className="relative" ref={dropdownRef}>
+                            <button
+                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                className="flex items-center gap-3 focus:outline-none"
+                            >
+                                <div className="text-right hidden sm:block">
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{user?.full_name || 'User'}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{user?.role || 'Guest'}</p>
                                 </div>
-
-                                <div className="py-1">
-                                    {/* STRICT CHECK: My Profile only for HOST */}
-                                    {user?.role === 'HOST' && (
-                                        <Link
-                                            to="/profile"
-                                            className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center gap-2"
-                                            onClick={() => setIsDropdownOpen(false)}
-                                        >
-                                            <User size={16} /> My Profile
-                                        </Link>
+                                <div className="h-10 w-10 rounded-full bg-brand-100 dark:bg-brand-900 border-2 border-brand-500 flex items-center justify-center overflow-hidden hover:bg-brand-200 transition-colors">
+                                    {user?.profile_photo_url ? (
+                                        <img src={user.profile_photo_url} alt="Profile" className="h-full w-full object-cover" />
+                                    ) : (
+                                        <span className="text-brand-700 dark:text-brand-300 font-bold">{user?.first_name?.[0] || 'A'}</span>
                                     )}
-
-                                    <Link
-                                        to="/settings"
-                                        className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center gap-2"
-                                        onClick={() => setIsDropdownOpen(false)}
-                                    >
-                                        <Settings size={16} /> Settings
-                                    </Link>
                                 </div>
+                                <ChevronDown size={16} className="text-slate-400 hidden sm:block dark:text-slate-500" />
+                            </button>
 
-                                <div className="border-t border-slate-100 mt-1 pt-1">
-                                    <button
-                                        onClick={handleLogout}
-                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-                                    >
-                                        <LogOut size={16} /> Sign Out
-                                    </button>
+                            {isDropdownOpen && (
+                                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-100 dark:border-slate-700 py-2 animate-in fade-in slide-in-from-top-5 duration-200 z-50">
+                                    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 rounded-t-xl">
+                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{user?.full_name}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">{user?.email || user?.phone}</p>
+                                        <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 uppercase">
+                                            {user?.role}
+                                        </span>
+                                    </div>
+                                    <div className="py-1">
+                                        {user?.role === 'HOST' && (
+                                            <Link to="/profile" className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-brand-600 flex items-center gap-2" onClick={() => setIsDropdownOpen(false)}>
+                                                <User size={16} /> My Profile
+                                            </Link>
+                                        )}
+                                        <Link to="/settings" className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-brand-600 flex items-center gap-2" onClick={() => setIsDropdownOpen(false)}>
+                                            <Settings size={16} /> Settings
+                                        </Link>
+                                    </div>
+                                    <div className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1">
+                                        <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors">
+                                            <LogOut size={16} /> Sign Out
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </header>
 
                 {/* Page Content */}
-                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-6">
+                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 transition-colors duration-300">
                     <Outlet />
                 </main>
             </div>
