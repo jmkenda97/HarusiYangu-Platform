@@ -6,8 +6,9 @@ import { useAuth } from '../context/AuthContext';
 const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { name: 'My Events', icon: Calendar, path: '/events' },
-    { name: 'Users', icon: Users, path: '/users' },
+    // ADDED: My Profile Link in Sidebar below My Events
     { name: 'My Profile', icon: User, path: '/profile' },
+    { name: 'Users', icon: Users, path: '/users' },
 ];
 
 const DashboardLayout = () => {
@@ -20,24 +21,20 @@ const DashboardLayout = () => {
 
     // SIMPLE TITLE LOGIC
     useEffect(() => {
-        // If a child page (EventDetails) changes the document.title, we use that.
-        // Otherwise, we use the path.
         if (document.title !== 'HarusiYangu') {
             setHeaderTitle(document.title);
         } else {
-            // Clean URL names
             const path = location.pathname;
             if (path === '/dashboard') setHeaderTitle('Dashboard');
             else if (path === '/events') setHeaderTitle('My Events');
             else if (path === '/users') setHeaderTitle('User Management');
             else if (path === '/profile') setHeaderTitle('My Profile');
-            // Handle Dynamic Event URL: /events/uuid -> Show "Event Details"
             else if (path.match(/^\/events\/[a-f0-9-]+$/)) setHeaderTitle('Event Details');
             else setHeaderTitle(path.replace('/', '').replace('/', ' ').replace(/\b\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1)));
         }
     }, [location]);
 
-    // Update title if document title changes (reactivity)
+    // Update title if document title changes
     useEffect(() => {
         if (document.title !== 'HarusiYangu') {
             setHeaderTitle(document.title);
@@ -73,17 +70,22 @@ const DashboardLayout = () => {
             {/* Sidebar */}
             <aside className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
                 {/* Logo Section in Sidebar */}
                 <div className="flex items-center justify-center h-16 bg-slate-950 shadow-md border-b border-slate-800">
-                    <span className="text-xl font-bold tracking-wider text-brand-400">HARUSIYANGU</span>
+                    <span className="text-xl font-bold tracking-wider text-brand-400">HARUSIANGU</span>
                 </div>
 
                 <nav className="mt-6 px-4 space-y-2">
                     {menuItems.map((item) => {
-                        // Security Check
+                        // SECURITY CHECK 1: Hide Users from everyone except SUPER_ADMIN
                         if (item.name === 'Users' && user?.role !== 'SUPER_ADMIN') {
+                            return null;
+                        }
+
+                        // SECURITY CHECK 2: Hide My Profile from everyone except HOST
+                        if (item.name === 'My Profile' && user?.role !== 'HOST') {
                             return null;
                         }
 
@@ -98,8 +100,9 @@ const DashboardLayout = () => {
                                 className={`
                   flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200
                   ${isActive
-                                        ? 'bg-brand-600 text-white shadow-lg shadow-brand-900/50'
-                                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'}
+                                    ? 'bg-brand-600 text-white shadow-lg shadow-brand-900/50'
+                                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                }
                 `}
                             >
                                 <Icon size={20} className="mr-3" />
@@ -133,7 +136,7 @@ const DashboardLayout = () => {
                             className="flex items-center gap-3 focus:outline-none"
                         >
                             <div className="text-right hidden sm:block">
-                                <p className="text-sm font-semibold text-slate-900">{user?.full_name || 'User'}</p>
+                                <p className="text-sm font-semibold text-s2xl font-slate-900">{user?.full_name || 'User'}</p>
                                 <p className="text-xs text-slate-500">{user?.role || 'Guest'}</p>
                             </div>
                             
@@ -167,13 +170,17 @@ const DashboardLayout = () => {
                                 </div>
 
                                 <div className="py-1">
-                                    <Link
-                                        to="/profile"
-                                        className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center gap-2"
-                                        onClick={() => setIsDropdownOpen(false)}
-                                    >
-                                        <User size={16} /> My Profile
-                                    </Link>
+                                    {/* STRICT CHECK: My Profile only for HOST */}
+                                    {user?.role === 'HOST' && (
+                                        <Link
+                                            to="/profile"
+                                            className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center gap-2"
+                                            onClick={() => setIsDropdownOpen(false)}
+                                        >
+                                            <User size={16} /> My Profile
+                                        </Link>
+                                    )}
+
                                     <Link
                                         to="/settings"
                                         className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center gap-2"

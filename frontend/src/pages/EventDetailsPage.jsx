@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext'; // <--- ADDED THIS
 import api from '../api/axios';
 import {
     ArrowLeft, Users, Wallet, CreditCard, Plus, ChevronLeft, ChevronRight, CheckCircle, Clock,
-    AlertCircle, UserPlus, Trash2, Edit, Crown, Mail, Phone, DollarSign, PieChart, List, Calculator, AlertTriangle,
-    Upload, Download, FileSpreadsheet, XCircle, Calendar, Search, UserCog
+    AlertCircle, UserPlus, Trash2, Edit, Crown, Mail, Phone, DollarSign, Calculator, AlertTriangle,
+    Upload, Download, FileSpreadsheet, XCircle, Calendar, Search
 } from 'lucide-react';
 
 const EventDetailsPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth(); // <--- ADDED THIS
     const [activeTab, setActiveTab] = useState('overview');
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -58,11 +60,9 @@ const EventDetailsPage = () => {
     // --- COMMITTEE STATES ---
     const [committee, setCommittee] = useState([]);
     const [showCommitteeModal, setShowCommitteeModal] = useState(false);
-    // UPDATED: Added first_name and last_name to form state
+    // SIMPLIFIED FORM: Removed manual permission checkboxes
     const [committeeForm, setCommitteeForm] = useState({
-        first_name: '', last_name: '', phone: '', committee_role: 'MEMBER',
-        can_manage_budget: false, can_manage_contributions: true, can_send_messages: true,
-        can_manage_vendors: false, can_scan_cards: false
+        first_name: '', last_name: '', phone: '', committee_role: 'MEMBER'
     });
     const [editingCommitteeMember, setEditingCommitteeMember] = useState(null);
 
@@ -70,6 +70,19 @@ const EventDetailsPage = () => {
     const [importFile, setImportFile] = useState(null);
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState(null);
+
+    // --- PERMISSION HELPER ---
+    // This checks if the user can see a specific section based on Role or Ownership
+    const canAccess = (permissionName) => {
+        // 1. Super Admin sees everything
+        if (user?.role === 'SUPER_ADMIN') return true;
+        
+        // 2. Event Owner (HOST) sees everything (THIS FIXES YOUR ISSUE)
+        if (user?.id === event?.owner_user_id) return true;
+        
+        // 3. Committee Members check specific permission strings
+        return user?.permissions?.includes(permissionName);
+    };
 
     useEffect(() => {
         const loadData = async () => {
@@ -80,14 +93,17 @@ const EventDetailsPage = () => {
             setIsTabLoading(true);
             try {
                 if (activeTab === 'overview') {
-                    if (guests.length === 0) await fetchGuests();
-                    if (budgetItems.length === 0) await fetchBudget();
+                    if (guests.length === 0 && canAccess('view-event-guests')) await fetchGuests();
+                    if (budgetItems.length === 0 && canAccess('view-event-budget')) await fetchBudget();
                 } else if (activeTab === 'guests') {
-                    await fetchGuests();
+                    if (canAccess('view-event-guests')) await fetchGuests();
                 } else if (activeTab === 'budget') {
-                    await fetchBudget();
+                    if (canAccess('view-event-budget')) await fetchBudget();
                 } else if (activeTab === 'committee') {
-                    await fetchCommittee();
+                    // Committee tab: Owner OR specific permission
+                    if (user?.id === event?.owner_user_id || canAccess('manage-event-committee')) {
+                        await fetchCommittee();
+                    }
                 }
             } finally {
                 setIsTabLoading(false);
@@ -95,7 +111,7 @@ const EventDetailsPage = () => {
         };
 
         loadData();
-    }, [id, activeTab]);
+    }, [id, activeTab, user, event]); // Added user and event dependencies
 
     useEffect(() => {
         if (event) {
@@ -251,11 +267,7 @@ const EventDetailsPage = () => {
                 await api.post(`/events/${id}/committee`, committeeForm);
             }
             setShowCommitteeModal(false);
-            setCommitteeForm({
-                first_name: '', last_name: '', phone: '', committee_role: 'MEMBER',
-                can_manage_budget: false, can_manage_contributions: true, can_send_messages: true,
-                can_manage_vendors: false, can_scan_cards: false
-            });
+            setCommitteeForm({ first_name: '', last_name: '', phone: '', committee_role: 'MEMBER' });
             setEditingCommitteeMember(null);
             fetchCommittee();
         } catch (err) { alert(err.response?.data?.message || "Failed to save committee member"); }
@@ -265,17 +277,10 @@ const EventDetailsPage = () => {
     const handleEditCommittee = (member) => {
         setEditingCommitteeMember(member);
         setCommitteeForm({
-            // When editing, we populate names just for display, 
-            // but backend validation ignores names for existing users
             first_name: member.user?.first_name || '',
             last_name: member.user?.last_name || '',
             phone: member.user?.phone || '',
             committee_role: member.committee_role,
-            can_manage_budget: member.can_manage_budget,
-            can_manage_contributions: member.can_manage_contributions,
-            can_send_messages: member.can_send_messages,
-            can_manage_vendors: member.can_manage_vendors,
-            can_scan_cards: member.can_scan_cards,
         });
         setShowCommitteeModal(true);
     };
@@ -379,7 +384,6 @@ const EventDetailsPage = () => {
         b.item_name.toLowerCase().includes(budgetSearch.toLowerCase()) ||
         (b.category && b.category.category_name.toLowerCase().includes(budgetSearch.toLowerCase()))
     );
-    // Safe navigation for user properties
     const filteredCommittee = committee.filter(c =>
         (c.user?.full_name && c.user.full_name.toLowerCase().includes(committeeSearch.toLowerCase())) ||
         (c.user?.phone && c.user.phone.includes(committeeSearch))
@@ -414,6 +418,25 @@ const EventDetailsPage = () => {
 
     if (loading) return <div className="text-center p-10">Loading Event Details...</div>;
 
+    // --- DYNAMIC TAB LOGIC ---
+    // 1. Always start with overview
+    const availableTabs = ['overview'];
+    
+    // 2. Add tabs based on ownership or specific permissions
+    if (canAccess('view-event-guests')) availableTabs.push('guests');
+    if (canAccess('view-event-contributions')) availableTabs.push('contributors');
+    if (canAccess('view-event-budget')) availableTabs.push('budget');
+    
+    // 3. Committee tab: Owner or specific permission
+    if (user?.id === event?.owner_user_id || canAccess('manage-event-committee')) {
+        availableTabs.push('committee');
+    }
+
+    // 4. Safety: If current tab is not allowed (e.g. permission changed), switch to overview
+    if (!availableTabs.includes(activeTab)) {
+        setActiveTab(availableTabs[0]);
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -430,7 +453,7 @@ const EventDetailsPage = () => {
 
             {/* Tabs */}
             <div className="border-b border-slate-200 flex gap-6 md:gap-8 overflow-x-auto">
-                {['overview', 'guests', 'contributors', 'budget', 'committee'].map((tab) => (
+                {availableTabs.map((tab) => (
                     <button key={tab} onClick={() => { setActiveTab(tab); }} className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
                         {tab === 'budget' ? <span className="flex items-center gap-1"><Calculator size={14} /> {tab.charAt(0).toUpperCase() + tab.slice(1)}</span> : tab.charAt(0).toUpperCase() + tab.slice(1).replace('_', ' ')}
                     </button>
@@ -601,7 +624,7 @@ const EventDetailsPage = () => {
                 </div>
             )}
 
-            {/* 5. COMMITTEE (AUTO-CREATE LOGIC READY) */}
+            {/* 5. COMMITTEE (SIMPLIFIED MODAL) */}
             {activeTab === 'committee' && (
                 <div className="space-y-4">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -612,7 +635,7 @@ const EventDetailsPage = () => {
                                 <input type="text" placeholder="Search committee..." value={committeeSearch} onChange={(e) => setCommitteeSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none" />
                             </div>
                             <button onClick={() => handleAuthenticatedDownload(`/events/${id}/committee/export`, `committee_list_${event?.event_name?.replace(/\s+/g, '_')}.csv`)} className="bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors whitespace-nowrap"><FileSpreadsheet size={16} /> Export List</button>
-                            <button onClick={() => { setEditingCommitteeMember(null); setCommitteeForm({ first_name: '', last_name: '', phone: '', committee_role: 'MEMBER', can_manage_budget: false, can_manage_contributions: true, can_send_messages: true, can_manage_vendors: false, can_scan_cards: false }); setShowCommitteeModal(true); }} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"><UserPlus size={16} /> Add Member</button>
+                            <button onClick={() => { setEditingCommitteeMember(null); setCommitteeForm({ first_name: '', last_name: '', phone: '', committee_role: 'MEMBER' }); setShowCommitteeModal(true); }} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"><UserPlus size={16} /> Add Member</button>
                         </div>
                     </div>
 
@@ -624,7 +647,7 @@ const EventDetailsPage = () => {
                                         <th className="px-6 py-4 w-12 text-center">#</th>
                                         <th className="px-6 py-4">Member Info</th>
                                         <th className="px-6 py-4">Role</th>
-                                        <th className="px-6 py-4">Permissions</th>
+                                        <th className="px-6 py-4">Permissions (Auto)</th>
                                         <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -675,7 +698,7 @@ const EventDetailsPage = () => {
             {/* GUEST MODAL */}
             {showGuestModal && (<div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4"><div className="bg-white rounded-xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200"><div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center"><h3 className="font-bold text-slate-900">{editingGuest ? 'Edit Guest' : 'Add New Guest'}</h3><button onClick={() => setShowGuestModal(false)} className="text-slate-400 hover:text-slate-600">✕</button></div><form onSubmit={handleSaveGuest} className="p-6 space-y-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label><input required type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none" value={guestForm.full_name} onChange={e => setGuestForm({ ...guestForm, full_name: e.target.value })} /></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">Phone</label><input required type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none" value={guestForm.phone} onChange={e => setGuestForm({ ...guestForm, phone: e.target.value })} /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Email (Optional)</label><input type="email" className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none" value={guestForm.email} onChange={e => setGuestForm({ ...guestForm, email: e.target.value })} /></div></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Relationship (e.g. Aunt, Friend)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none" value={guestForm.relationship_label} onChange={e => setGuestForm({ ...guestForm, relationship_label: e.target.value })} /></div><div className="flex items-center gap-2"><input type="checkbox" id="is_vip" className="rounded text-brand-600 focus:ring-brand-500" checked={guestForm.is_vip} onChange={e => setGuestForm({ ...guestForm, is_vip: e.target.checked })} /><label htmlFor="is_vip" className="text-sm text-slate-700">Mark as VIP</label></div><div className="pt-4"><button type="submit" disabled={isSubmitting} className="w-full bg-brand-600 text-white py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors disabled:opacity-50">{editingGuest ? 'Update Guest' : 'Add Guest'}</button></div></form></div></div>)}
 
-            {/* COMMITTEE MODAL (UPDATED) */}
+            {/* COMMITTEE MODAL (SIMPLIFIED - NO CHECKBOXES) */}
             {showCommitteeModal && (
                 <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -685,7 +708,7 @@ const EventDetailsPage = () => {
                         </div>
                         <form onSubmit={handleSaveCommittee} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
 
-                            {/* NEW: Name Inputs (Required for auto-creation) */}
+                            {/* Name Inputs (Required for auto-creation) */}
                             {!editingCommitteeMember && (
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -726,49 +749,8 @@ const EventDetailsPage = () => {
                                     <option value="SECRETARY">Secretary</option>
                                     <option value="CHAIRPERSON">Chairperson</option>
                                     <option value="GATE_OFFICER">Gate Officer (Scanner)</option>
-
                                 </select>
-                            </div>
-
-                            <div className="border-t border-slate-100 pt-4">
-                                <label className="block text-sm font-medium text-slate-700 mb-3">Permissions</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
-                                        <input type="checkbox" className="rounded text-brand-600 focus:ring-brand-500 h-4 w-4" checked={committeeForm.can_manage_contributions} onChange={e => setCommitteeForm({ ...committeeForm, can_manage_contributions: e.target.checked })} />
-                                        <div className="text-sm">
-                                            <p className="font-medium text-slate-900">Contributions</p>
-                                            <p className="text-xs text-slate-500">Manage pledges & payments</p>
-                                        </div>
-                                    </label>
-                                    <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
-                                        <input type="checkbox" className="rounded text-brand-600 focus:ring-brand-500 h-4 w-4" checked={committeeForm.can_send_messages} onChange={e => setCommitteeForm({ ...committeeForm, can_send_messages: e.target.checked })} />
-                                        <div className="text-sm">
-                                            <p className="font-medium text-slate-900">Messages</p>
-                                            <p className="text-xs text-slate-500">Send SMS/WhatsApp</p>
-                                        </div>
-                                    </label>
-                                    <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
-                                        <input type="checkbox" className="rounded text-brand-600 focus:ring-brand-500 h-4 w-4" checked={committeeForm.can_manage_budget} onChange={e => setCommitteeForm({ ...committeeForm, can_manage_budget: e.target.checked })} />
-                                        <div className="text-sm">
-                                            <p className="font-medium text-slate-900">Budget</p>
-                                            <p className="text-xs text-slate-500">Edit budget items</p>
-                                        </div>
-                                    </label>
-                                    <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
-                                        <input type="checkbox" className="rounded text-brand-600 focus:ring-brand-500 h-4 w-4" checked={committeeForm.can_manage_vendors} onChange={e => setCommitteeForm({ ...committeeForm, can_manage_vendors: e.target.checked })} />
-                                        <div className="text-sm">
-                                            <p className="font-medium text-slate-900">Vendors</p>
-                                            <p className="text-xs text-slate-500">Manage vendors</p>
-                                        </div>
-                                    </label>
-                                    <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors sm:col-span-2">
-                                        <input type="checkbox" className="rounded text-brand-600 focus:ring-brand-500 h-4 w-4" checked={committeeForm.can_scan_cards} onChange={e => setCommitteeForm({ ...committeeForm, can_scan_cards: e.target.checked })} />
-                                        <div className="text-sm">
-                                            <p className="font-medium text-slate-900">Scan Cards</p>
-                                            <p className="text-xs text-slate-500">Access gate scanner</p>
-                                        </div>
-                                    </label>
-                                </div>
+                                <p className="text-xs text-slate-400 mt-1">Permissions are automatically assigned based on the selected role.</p>
                             </div>
 
                             <div className="pt-4">

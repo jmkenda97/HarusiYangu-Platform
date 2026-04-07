@@ -7,7 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import UsersPage from './pages/UsersPage';
 import ProfilePage from './pages/ProfilePage';
 import EventsPage from './pages/EventsPage';      // <--- IMPORT
-import EventDetailsPage from './pages/EventDetailsPage'; // <--- IMPORT
+import EventDetailsPage from './pages/EventDetailsPage'; // <--- IMPOR T
 
 function App() {
   return (
