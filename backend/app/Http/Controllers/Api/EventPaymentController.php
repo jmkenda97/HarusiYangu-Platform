@@ -36,7 +36,7 @@ class EventPaymentController extends Controller
             ->firstOrFail();
 
         try {
-            DB::transaction(function () use ($request, $event, $pledge, $user) {
+            DB::transaction(function () use ($request, $event, $pledge) {
                 $receipt = 'REC-' . strtoupper(Str::random(8));
 
                 ContributionPayment::create([

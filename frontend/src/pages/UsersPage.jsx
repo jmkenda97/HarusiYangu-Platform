@@ -74,43 +74,43 @@ const UsersPage = () => {
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-900">User Management</h2>
-                    <p className="text-slate-500">Manage system users, roles, and access.</p>
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">User Management</h2>
+                    <p className="text-slate-500 dark:text-slate-400">Manage system users, roles, and access.</p>
                 </div>
-                <button onClick={handleAddClick} className="bg-brand-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-brand-700 shadow-sm flex items-center gap-2">
+                <button onClick={handleAddClick} className="bg-brand-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-brand-700 shadow-sm flex items-center gap-2 transition-colors">
                     <UsersIcon size={18} /> Add New User
                 </button>
             </div>
 
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <div className="flex items-center gap-3">
-                        <div className="p-3 bg-blue-50 text-blue-600 rounded-lg"><UsersIcon size={20} /></div>
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg"><UsersIcon size={20} /></div>
                         <div>
-                            <p className="text-sm text-slate-500">Total Users</p>
-                            <p className="text-xl font-bold text-slate-900">{users.length}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Total Users</p>
+                            <p className="text-xl font-bold text-slate-900 dark:text-white">{users.length}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 flex gap-4">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex gap-4">
                     <div className="relative flex-1">
-                        <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+                        <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-500" size={18} />
                         <input
                             type="text"
                             placeholder="Search users..."
-                            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-brand-500"
+                            className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:border-brand-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white dark:placeholder-slate-500"
                         />
                     </div>
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+                    <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                        <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
                             <tr>
                                 <th className="px-6 py-4">User</th>
                                 <th className="px-6 py-4">Role</th>
@@ -118,33 +118,32 @@ const UsersPage = () => {
                                 <th className="px-6 py-4 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {loading ? (
-                                <tr><td colSpan="4" className="px-6 py-8 text-center">Loading...</td></tr>
+                                <tr><td colSpan="4" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500">Loading...</td></tr>
                             ) : users.length === 0 ? (
-                                <tr><td colSpan="4" className="px-6 py-8 text-center">No users found.</td></tr>
+                                <tr><td colSpan="4" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500">No users found.</td></tr>
                             ) : (
                                 users.map((user) => (
-                                    <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                                    <tr key={user.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600">
+                                                <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-slate-600 dark:text-slate-300">
                                                     {user.first_name?.[0]}
                                                 </div>
                                                 <div>
-                                                    <p className="font-medium text-slate-900">{user.full_name}</p>
-                                                    <p className="text-xs text-slate-500">{user.phone}</p>
+                                                    <p className="font-medium text-slate-900 dark:text-white">{user.full_name}</p>
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400">{user.phone}</p>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
                                                 <Shield size={12} /> {user.role}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium 
-                        ${user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>
                                                 {user.status}
                                             </span>
                                         </td>
@@ -155,7 +154,7 @@ const UsersPage = () => {
                                                 <button
                                                     onClick={() => handleToggleStatus(user)}
                                                     title={user.status === 'ACTIVE' ? 'Suspend User' : 'Activate User'}
-                                                    className={`p-2 rounded-lg hover:bg-slate-100 transition-colors ${user.status === 'ACTIVE' ? 'text-amber-600' : 'text-emerald-600'}`}
+                                                    className={`p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${user.status === 'ACTIVE' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}
                                                 >
                                                     {user.status === 'ACTIVE' ? <Ban size={16} /> : <Check size={16} />}
                                                 </button>
@@ -164,7 +163,7 @@ const UsersPage = () => {
                                                 <button
                                                     onClick={() => handleEditClick(user)}
                                                     title="Edit User"
-                                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-blue-900/20"
                                                 >
                                                     <Pencil size={16} />
                                                 </button>
@@ -173,7 +172,7 @@ const UsersPage = () => {
                                                 <button
                                                     onClick={() => handleDelete(user.id, user.full_name)}
                                                     title="Delete User"
-                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors dark:text-slate-400 dark:hover:text-red-400 dark:hover:bg-red-900/20"
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>

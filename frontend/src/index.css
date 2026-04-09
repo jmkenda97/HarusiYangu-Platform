@@ -1,9 +1,11 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-family-sans: 'Inter', 'ui-sans-serif', 'system-ui';
   
-  /* Define your Brand Colors here */
+  /* Re-define brand colors here since we deleted config.js */
   --color-brand-50: #eff6ff;
   --color-brand-100: #dbeafe;
   --color-brand-500: #3b82f6;
@@ -13,14 +15,12 @@
   --color-brand-900: #1e3a8a;
 }
 
+/* DO NOT set background-color here, let Tailwind handle it */
 body {
   font-family: var(--font-family-sans);
-  background-color: #f8fafc; /* Slate-50 */
-  color: #1e293b; /* Slate-800 */
   -webkit-font-smoothing: antialiased;
 }
 
-/* Smooth animations for a premium feel */
 * {
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);

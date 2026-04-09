@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, Settings, Calendar, Home, PanelLeftClose, PanelLeftOpen, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext'; // Import useTheme
+import { useTheme } from '../context/ThemeContext';
 
 const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -11,11 +11,10 @@ const menuItems = [
     { name: 'Users', icon: Users, path: '/users' },
 ];
 
-const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggleDesktopCollapse }) => {
+const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggleDesktopCollapse, handleLogout }) => {
     const { user } = useAuth();
     const location = useLocation();
 
-    // SIMPLE TITLE LOGIC
     const [headerTitle, setHeaderTitle] = useState('Dashboard');
     useEffect(() => {
         if (document.title !== 'HarusiYangu') {
@@ -32,12 +31,10 @@ const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggl
     }, [location]);
 
     return (
-        <>
-            {/* Sidebar Header with Logo & Collapse Toggle ONLY */}
-            <div className={`flex items-center justify-between h-16 bg-white dark:bg-slate-900 shadow-md border-b border-slate-200 dark:border-slate-800 ${isDesktopCollapsed ? 'px-2' : 'px-6'}`}>
-                {!isDesktopCollapsed && <span className="text-xl font-bold tracking-wider text-brand-600 dark:text-brand-400 whitespace-nowrap">HARUSIANGU</span>}
-                
-                {/* Only Collapse Toggle remains here */}
+        <div className="flex flex-col h-full">
+            {/* Sidebar Header */}
+            <div className={`flex items-center justify-between h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 ${isDesktopCollapsed ? 'px-2' : 'px-6'}`}>
+                {!isDesktopCollapsed && <span className="text-xl font-bold tracking-wider text-brand-600 dark:text-brand-400 whitespace-nowrap">HARUSIYANGU</span>}
                 <button 
                     onClick={toggleDesktopCollapse} 
                     className="hidden lg:block p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -47,9 +44,14 @@ const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggl
                 </button>
             </div>
 
-            <nav className={`mt-6 ${isDesktopCollapsed ? 'px-2' : 'px-4'} space-y-2`}>
+            {/* Navigation Links */}
+            <nav className={`flex-1 mt-6 ${isDesktopCollapsed ? 'px-2' : 'px-4'} space-y-2`}>
                 {menuItems.map((item) => {
                     if (item.name === 'Users' && user?.role !== 'SUPER_ADMIN') return null;
+                    
+                    // --- ADDED THIS LINE TO HIDE "MY EVENTS" FOR SUPER ADMIN ---
+                    if (item.name === 'My Events' && user?.role === 'SUPER_ADMIN') return null;
+
                     if (item.name === 'My Profile' && user?.role !== 'HOST') return null;
 
                     const Icon = item.icon;
@@ -80,18 +82,38 @@ const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggl
                     );
                 })}
             </nav>
-        </>
+
+            {/* --- SIDEBAR LOGOUT BUTTON (Bottom) --- */}
+            <div className={`p-4 border-t border-slate-200 dark:border-slate-800 ${isDesktopCollapsed ? 'text-center' : ''}`}>
+                <button
+                    onClick={handleLogout}
+                    className={`
+                        w-full flex items-center ${isDesktopCollapsed ? 'justify-center' : 'px-4'} py-3 text-sm font-medium rounded-lg transition-colors duration-200
+                        text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20
+                    `}
+                    title="Log Out"
+                >
+                    <LogOut size={20} className={isDesktopCollapsed ? '' : 'mr-3'} />
+                    {!isDesktopCollapsed && <span>Log Out</span>}
+                </button>
+            </div>
+        </div>
     );
-}
+};
 
 const DashboardLayout = () => {
     const { user, logout } = useAuth();
-    const { theme, toggleTheme } = useTheme(); // Get theme functions
+    const { theme, toggleTheme } = useTheme();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
     const location = useLocation();
     const dropdownRef = useRef(null);
+
+    const handleLogout = () => {
+        logout();
+        window.location.href = '/login';
+    };
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -103,14 +125,9 @@ const DashboardLayout = () => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const handleLogout = () => {
-        logout();
-        window.location.href = '/login';
-    };
-
     return (
-        // REMOVED ThemeProvider wrapper here because it is now in App.jsx
         <div className="flex h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+            
             {/* Mobile Overlay */}
             {sidebarOpen && (
                 <div
@@ -119,7 +136,7 @@ const DashboardLayout = () => {
                 ></div>
             )}
 
-            {/* Sidebar - Updated to support Light/Dark */}
+            {/* SIDEBAR */}
             <aside className={`
                 fixed inset-y-0 left-0 z-50 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 flex flex-col
                 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -131,11 +148,13 @@ const DashboardLayout = () => {
                     setSidebarOpen={setSidebarOpen} 
                     isDesktopCollapsed={isDesktopCollapsed}
                     toggleDesktopCollapse={() => setIsDesktopCollapsed(!isDesktopCollapsed)}
+                    handleLogout={handleLogout}
                 />
             </aside>
 
             <div className="flex-1 flex flex-col overflow-hidden transition-all duration-300">
-                {/* Top Header */}
+                
+                {/* TOP HEADER */}
                 <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 h-16 flex items-center justify-between px-6 shadow-sm z-10 transition-colors duration-300">
                     <div className="flex items-center">
                         <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
@@ -148,19 +167,20 @@ const DashboardLayout = () => {
                         </h2>
                     </div>
 
-                    {/* RIGHT SIDE: Theme Toggle & Profile */}
                     <div className="flex items-center gap-4">
-                        
-                        {/* --- THEME TOGGLE BUTTON (MOVED HERE) --- */}
+                        {/* THEME TOGGLE */}
                         <button 
-                            onClick={toggleTheme} 
+                            onClick={() => {
+                                console.log("Toggle Clicked"); // Debug
+                                toggleTheme(); 
+                            }}
                             className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors focus:outline-none"
                             title="Toggle Theme"
                         >
                             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
                         </button>
 
-                        {/* User Profile Dropdown */}
+                        {/* PROFILE DROPDOWN */}
                         <div className="relative" ref={dropdownRef}>
                             <button
                                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -210,7 +230,7 @@ const DashboardLayout = () => {
                     </div>
                 </header>
 
-                {/* Page Content */}
+                {/* PAGE CONTENT */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950 p-6 transition-colors duration-300">
                     <Outlet />
                 </main>

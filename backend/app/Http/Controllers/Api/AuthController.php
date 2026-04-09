@@ -24,12 +24,25 @@ class AuthController extends Controller
     {
         // 1. SECURITY CHECK: Prevent OTP for unregistered users (Prevents SMS Waste)
         if ($request->purpose === 'LOGIN') {
-            $userExists = User::where('phone', $request->phone)->exists();
-            if (!$userExists) {
+            // CHANGED: We use first() to get the user object so we can check the status.
+            // Previously this was just exists().
+            $user = User::where('phone', $request->phone)->first();
+
+            if (!$user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Phone number not registered. Please complete registration first.'
                 ], 422); // 422 Unprocessable Entity (Validation Error)
+            }
+
+            // =================================================================
+            // FIX: BLOCK SUSPENDED USERS FROM REQUESTING OTP
+            // =================================================================
+            if ($user->status === 'SUSPENDED') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your account is SUSPENDED. Please communicate with the service provider to reactivate it.'
+                ], 403); // 403 Forbidden
             }
         }
 
@@ -77,6 +90,16 @@ class AuthController extends Controller
                 'success' => false,
                 'message' => 'User not found. This phone number is not registered. Please complete the registration process first.'
             ], 422);
+        }
+
+        // =================================================================
+        // FIX: BLOCK SUSPENDED USERS FROM LOGGING IN
+        // =================================================================
+        if ($user->status === 'SUSPENDED') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account is SUSPENDED. Please communicate with the service provider to reactivate it.'
+            ], 403);
         }
 
         // 3. DIAGNOSTIC: Find the record by PHONE only first

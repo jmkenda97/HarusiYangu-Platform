@@ -128,11 +128,11 @@ const LandingPage = () => {
             <nav className="fixed w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-sm">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({top:0, behavior:'smooth'})}>
-                        <div className="w-10 h-10 bg-[#1e3a8a] rounded-lg flex items-center justify-center text-white font-serif text-xl font-bold shadow-md">H</div>
+                        {/* <div className="w-10 h-10 bg-[#1e3a8a] rounded-lg flex items-center justify-center text-white font-serif text-xl font-bold shadow-md">H</div>
                         <div className="flex flex-col">
                             <span className="text-xl font-bold tracking-tight text-slate-900 leading-none">HarusiYangu</span>
                             <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Event Platform</span>
-                        </div>
+                        </div> */}
                     </div>
                     <div className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-600">
                         <a href="#features" className="hover:text-blue-900 transition-colors">Features</a>
@@ -165,7 +165,7 @@ const LandingPage = () => {
                             <span className="text-xs font-bold text-blue-900 uppercase tracking-widest">The Central Platform</span>
                         </div>
                         <h1 className="text-5xl lg:text-7xl font-bold text-slate-900 leading-[1.1] tracking-tight font-serif">
-                            The Central Platform for Your <span className="text-[#1e3a8a] italic">Big Day</span>.
+                            The Central Platform for Your <span className="text-[#1e3a8a] ">Big Day</span>.
                         </h1>
                         <p className="text-lg text-slate-600 leading-relaxed border-l-4 border-[#1e3a8a] pl-6">
                             Elevating Tanzanian events through precision, transparency, and elegance. Manage contributions, budgets, and vendors with absolute control.
@@ -303,7 +303,7 @@ const LandingPage = () => {
                     </div>
                     <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700">
                         <div className="flex items-center gap-4 mb-6">
-                            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-2xl font-bold">H</div>
+                            {/* <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-2xl font-bold">H</div> */}
                             <div>
                                 <h3 className="font-bold text-lg">Ready to Start?</h3>
                                 <p className="text-slate-400 text-sm">Join thousands of event hosts.</p>
@@ -321,7 +321,7 @@ const LandingPage = () => {
                         <button onClick={handleCloseAuth} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-600 z-20 hidden md:block"><CloseIcon size={18} /></button>
                         <div className="hidden md:flex md:w-2/5 bg-[#0f172a] text-white p-12 flex flex-col justify-between relative overflow-hidden">
                             <div className="relative z-10">
-                                <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center text-2xl font-bold mb-8">H</div>
+                                {/* <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center text-2xl font-bold mb-8">H</div> */}
                                 <h3 className="text-2xl font-bold mb-4">{authMode === 'login' ? 'Welcome Back.' : 'Join the Platform.'}</h3>
                                 <p className="text-slate-400 text-sm leading-relaxed mb-8">{authMode === 'login' ? "Access your event dashboard, manage your contributions, and stay updated with your committee." : "Create your account and start planning your event with the most advanced tools available."}</p>
                             </div>
@@ -406,7 +406,7 @@ const LandingPage = () => {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
                         <div className="space-y-4">
                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center font-bold">H</div>
+                                {/* <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center font-bold">H</div> */}
                                 <span className="text-xl font-bold">HarusiYangu</span>
                             </div>
                             <p className="text-slate-400 text-sm leading-relaxed">The digital transformation of Tanzanian social event culture, combining financial transparency, automation, and community engagement.</p>

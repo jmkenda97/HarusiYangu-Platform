@@ -13,13 +13,16 @@ export const ThemeProvider = ({ children }) => {
 
   useEffect(() => {
     const root = window.document.documentElement;
+    console.log("Applying Theme:", theme); // <--- DEBUG LOG
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    console.log("Switching to:", newTheme); // <--- DEBUG LOG
+    setTheme(newTheme);
   };
 
   return (
