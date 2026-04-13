@@ -223,19 +223,14 @@ class AuthController extends Controller
             'data' => ['debug_otp' => $otp]
         ]);
     }
-
-    // ============================================================
-    // STEP 2: VERIFY OTP & PREPARE ACCOUNT
-    // ============================================================
-    public function verifyRegistrationOtp(Request $request)
+     public function verifyRegistrationOtp(Request $request)
     {
-        // 1. Validate Input
         $request->validate([
             'phone' => 'required|string',
-            'otp_code' => 'required|string|size:6'
+            'otp_code' => 'required|string|size:6',
+            'role' => 'required|in:HOST,VENDOR'
         ]);
 
-        // 2. Find OTP
         $otpRecord = OtpVerification::where('phone', $request->phone)
             ->where('otp_code', $request->otp_code)
             ->where('purpose', 'REGISTER')
@@ -247,28 +242,34 @@ class AuthController extends Controller
             return response()->json(['success' => false, 'message' => 'Invalid or expired OTP.'], 401);
         }
 
-        // 3. Mark OTP Used
         $otpRecord->update(['is_used' => true]);
+        $role = strtoupper($request->role);
 
-        // 4. Create User
         $user = User::create([
             'id' => (string) Str::uuid(),
             'phone' => $request->phone,
-            'first_name' => 'New', // Temporary
+            'first_name' => 'New',
             'last_name' => 'User',
-            'role' => 'HOST', // <--- HARDCODED TO FIX THE NULL ERROR
-            'status' => 'ACTIVE',
+            'role' => $role,
+            'status' => 'ACTIVE', // User is active, but...
             'onboarding_completed' => false,
             'is_phone_verified' => true
         ]);
 
-        // --- FIX: ASSIGN HOST ROLE IMMEDIATELY ---
-        // This ensures the new user has the 'HOST' role in Spatie immediately.
-        $user->assignRole('HOST');
-        // -----------------------------------------
+        $user->assignRole($role);
 
-        // 5. Issue Temporary Token
-        // Note: We remove complex ability definitions to avoid crashes
+        // CREATE VENDOR RECORD AS PENDING APPROVAL
+        if ($role === 'VENDOR') {
+            \App\Models\Vendor::create([
+                'id' => (string) Str::uuid(),
+                'user_id' => $user->id,
+                'full_name' => 'New Vendor',
+                'phone' => $user->phone,
+                'service_type' => 'OTHER',
+                'status' => 'PENDING_APPROVAL' // <--- CRITICAL: START AS PENDING
+            ]);
+        }
+
         $tokenResult = $user->createToken('onboarding_token');
 
         return response()->json([
@@ -284,21 +285,36 @@ class AuthController extends Controller
     // ============================================================
     // STEP 3: COMPLETE PROFILE (FULL REGISTRATION)
     // ============================================================
+       // ============================================================
+    // REGISTER: STEP 3 (COMPLETE PROFILE & UPLOAD FILES)
+    // ============================================================
     public function completeRegistration(Request $request)
     {
-        $user = $request->user(); // Authenticated via the temp token
+        $user = $request->user();
 
-        // Validation
-        $request->validate([
+        // Reload user to ensure vendor relationship is fresh
+        $user->load('vendor');
+
+        $rules = [
             'first_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
             'last_name' => 'required|string|max:100',
             'email' => 'nullable|email|unique:users,email,' . $user->id,
-            'password' => 'required|string|min:6|confirmed', // Require password
-            'profile_photo_url' => 'nullable|string'
-        ]);
+            'password' => 'required|string|min:6|confirmed',
+            'profile_photo_url' => 'nullable|string',
+        ];
 
-        // Update User
+        if ($user->role === 'VENDOR') {
+            $rules['business_name'] = 'required|string|max:255';
+            $rules['service_type'] = 'required|in:CATERING,DECORATION,MC,PHOTOGRAPHY,VIDEOGRAPHY,SOUND,TRANSPORT,TENT_CHAIRS,CAKE,MAKEUP,SECURITY,VENUE,PRINTING,OTHER';
+            $rules['address'] = 'nullable|string';
+            $rules['business_license'] = 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048';
+            $rules['business_certificate'] = 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048';
+        }
+
+        $request->validate($rules);
+
+        // 1. Update User Info
         $user->update([
             'first_name' => $request->first_name,
             'middle_name' => $request->middle_name,
@@ -306,18 +322,40 @@ class AuthController extends Controller
             'email' => $request->email,
             'password_hash' => Hash::make($request->password),
             'profile_photo_url' => $request->profile_photo_url,
-            'onboarding_completed' => true, // <--- MARK COMPLETE
+            'onboarding_completed' => true,
         ]);
 
-        // Revoke temp token and issue real token
+        // 2. Update Vendor Info & Handle Documents
+        if ($user->role === 'VENDOR' && $user->vendor) {
+            $user->vendor->update([
+                'full_name' => $user->first_name . ' ' . $user->last_name,
+                'business_name' => $request->business_name,
+                'phone' => $user->phone,
+                'email' => $user->email,
+                'service_type' => $request->service_type,
+                'address' => $request->address ?? null,
+            ]);
+
+            // 3. Handle Document Uploads
+            // LOGIC: Save to Storage -> Create DB Record
+            if ($request->hasFile('business_license')) {
+                $path = $request->file('business_license')->store('vendor-docs/' . $user->id, 'public');
+                $this->createVendorDocument($user->vendor->id, 'BUSINESS_LICENSE', $path, $request->file('business_license'));
+            }
+
+            if ($request->hasFile('business_certificate')) {
+                $path = $request->file('business_certificate')->store('vendor-docs/' . $user->id, 'public');
+                $this->createVendorDocument($user->vendor->id, 'CERTIFICATE', $path, $request->file('business_certificate'));
+            }
+        }
+
+        // 4. Issue Final Token
         $user->currentAccessToken()->delete();
         $newToken = $user->createToken('auth_token')->plainTextToken;
 
-        // TODO: Send Email Verification here in Phase 2
-
         return response()->json([
             'success' => true,
-            'message' => 'Account created successfully. Welcome to HarusiYangu!',
+            'message' => 'Registration complete! Your account is under review.',
             'data' => [
                 'user' => new UserResource($user),
                 'token' => $newToken,
@@ -325,4 +363,11 @@ class AuthController extends Controller
             ]
         ]);
     }
+
+
+
+    private function createVendorDocument($vendorId, $type, $path, $file)
+    {
+}
+
 }

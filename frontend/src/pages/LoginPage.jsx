@@ -2,14 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
-import { Lock, Phone, ArrowRight, RefreshCw, User, Mail, Image, Check, X as CloseIcon, Shield, CreditCard, Users, Menu, ChevronRight, ChevronLeft, Zap, Globe, Clock } from 'lucide-react';
+import { Lock, Phone, ArrowRight, RefreshCw, User, Mail, Image, Check, X as CloseIcon, Shield, CreditCard, Users, Menu, ChevronRight, ChevronLeft, Zap, Globe, Clock, Store, Briefcase, Upload, FileText } from 'lucide-react';
 
 // --- 1. IMAGE CONFIGURATION ---
 const ASSETS = {
-    // The Hero Image: Updated to use your local WEDDING1.webp
-    hero: "/WEDDING1.webp", 
-    
-    // Celebration Slider Images: Updated to use your local files
+    hero: "/WEDDING1.webp",
     celebrations: [
         { title: "Harusi (Wedding)", desc: "The grand celebration of your union. Manage everything from invites to the reception.", img: "/WEDDING1.webp" },
         { title: "Kitchen Party", desc: "Organize the kitchen party budget and committee activities with precision.", img: "/KITCHENPARTY.webp" },
@@ -19,24 +16,45 @@ const ASSETS = {
     ]
 };
 
+// Service Types matching your Database ENUM
+const VENDOR_SERVICES = [
+    'CATERING', 'DECORATION', 'MC', 'PHOTOGRAPHY', 'VIDEOGRAPHY',
+    'SOUND', 'TRANSPORT', 'TENT_CHAIRS', 'CAKE', 'MAKEUP',
+    'SECURITY', 'VENUE', 'PRINTING', 'OTHER'
+];
+
 const LandingPage = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-    const [authMode, setAuthMode] = useState('login'); 
+    const [authMode, setAuthMode] = useState('login');
     const [currentSlide, setCurrentSlide] = useState(0);
 
-    // --- AUTH LOGIC (PRESERVED) ---
+    // --- AUTH LOGIC ---
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [phone, setPhone] = useState('');
     const [otp, setOtp] = useState('');
+
+    // NEW: Registration Type State
+    const [accountType, setAccountType] = useState('HOST'); // 'HOST' or 'VENDOR'
+
+    // State for Text Inputs
     const [formData, setFormData] = useState({
         first_name: '', middle_name: '', last_name: '', email: '',
-        password: '', password_confirmation: '', profile_photo_url: ''
+        password: '', password_confirmation: '', profile_photo_url: '',
+        // Vendor Specific Fields
+        business_name: '', service_type: 'CATERING', address: ''
     });
+
+    // State for File Inputs (Documents)
+    const [files, setFiles] = useState({
+        business_license: null,
+        business_certificate: null
+    });
+
     const [imagePreview, setImagePreview] = useState(null);
-    
+
     const { login } = useAuth();
     const navigate = useNavigate();
 
@@ -47,7 +65,6 @@ const LandingPage = () => {
     const prevSlide = () => {
         setCurrentSlide((prev) => (prev - 1 + ASSETS.celebrations.length) % ASSETS.celebrations.length);
     };
-    // Auto-advance slider every 5 seconds
     useEffect(() => {
         const timer = setInterval(nextSlide, 5000);
         return () => clearInterval(timer);
@@ -55,12 +72,20 @@ const LandingPage = () => {
 
     const resetForm = () => {
         setStep(1); setMessage(''); setPhone(''); setOtp('');
-        setFormData({ first_name: '', middle_name: '', last_name: '', email: '', password: '', password_confirmation: '', profile_photo_url: '' });
+        setAccountType('HOST');
+        setFormData({
+            first_name: '', middle_name: '', last_name: '', email: '',
+            password: '', password_confirmation: '', profile_photo_url: '',
+            business_name: '', service_type: 'CATERING', address: ''
+        });
+        setFiles({ business_license: null, business_certificate: null });
         setImagePreview(null);
     };
+
     const handleOpenAuth = (mode) => { setAuthMode(mode); resetForm(); setIsAuthModalOpen(true); };
     const handleCloseAuth = () => { setIsAuthModalOpen(false); resetForm(); };
     const handleSwitchMode = (mode) => { setAuthMode(mode); resetForm(); };
+
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -76,63 +101,127 @@ const LandingPage = () => {
         setFormData({ ...formData, profile_photo_url: '' });
         setImagePreview(null);
     };
+
     const handleRequestOtp = async (e) => {
         e.preventDefault(); setLoading(true); setMessage('');
         try {
-            const endpoint = authMode === 'register' ? '/auth/register-otp' : '/auth/request-otp';
-            const payload = authMode === 'register' ? { phone } : { phone, purpose: 'LOGIN' };
-            const res = await api.post(endpoint, payload);
-            if (res.data.success) {
-                setStep(2); setMessage(`OTP sent! (Code: ${res.data.data.debug_otp})`);
+            if (authMode === 'register') {
+                const payload = { phone, role: accountType };
+                const res = await api.post('/auth/register-otp', payload);
+                if (res.data.success) {
+                    setStep(2); setMessage(`OTP sent! (Code: ${res.data.data.debug_otp})`);
+                }
+            } else {
+                const res = await api.post('/auth/request-otp', { phone, purpose: 'LOGIN' });
+                if (res.data.success) {
+                    setStep(2); setMessage(`OTP sent! (Code: ${res.data.data.debug_otp})`);
+                }
             }
         } catch (err) {
             setMessage(err.response?.data?.message || 'Failed to send OTP');
         } finally { setLoading(false); }
     };
+
+
+    // REPLACE THIS FUNCTION
     const handleVerifyOtp = async (e) => {
         e.preventDefault(); setLoading(true); setMessage('');
         try {
             if (authMode === 'register') {
-                const res = await api.post('/auth/verify-register-otp', { phone, otp_code: otp });
+                // CRITICAL: We MUST send the role here
+                const res = await api.post('/auth/verify-register-otp', {
+                    phone,
+                    otp_code: otp,
+                    role: accountType // <--- THIS MUST BE HERE
+                });
+
                 if (res.data.success) {
-                    const { temp_token } = res.data.data;
+                    const { temp_token, user } = res.data.data;
+
+                    // Save Temp Token
                     localStorage.setItem('harusiyangu_token', temp_token);
                     api.defaults.headers.common['Authorization'] = `Bearer ${temp_token}`;
-                    setStep(3); setMessage('Phone verified! Please complete your profile.');
+
+                    setStep(3);
+                    setMessage('Phone verified! Please complete your profile.');
                 }
             } else {
                 const result = await login(phone, otp);
-                if (result.success) { handleCloseAuth(); navigate('/dashboard'); }
+                if (result.success) {
+                    handleCloseAuth();
+                    // Navigate will be handled by App.js logic in Step 3
+                    navigate('/');
+                }
             }
-        } catch (err) { setMessage(err.response?.data?.message || 'Invalid or expired OTP'); }
+        } catch (err) {
+            setMessage(err.response?.data?.message || 'Invalid or expired OTP');
+        }
         finally { setLoading(false); }
     };
+
+    // REPLACE THIS FUNCTION
     const handleCompleteProfile = async (e) => {
-        e.preventDefault(); setLoading(true); setMessage('');
+        e.preventDefault();
+        setLoading(true);
+        setMessage('');
         try {
-            const res = await api.post('/auth/complete-registration', { ...formData, profile_photo_url: formData.profile_photo_url || null });
-            if (res.data.success) {
-                const { token } = res.data.data;
-                localStorage.setItem('harusiyangu_token', token);
-                handleCloseAuth();
-                window.location.href = '/dashboard';
+            const dataPayload = new FormData();
+
+            dataPayload.append('first_name', formData.first_name);
+            dataPayload.append('middle_name', formData.middle_name);
+            dataPayload.append('last_name', formData.last_name);
+            dataPayload.append('email', formData.email);
+            dataPayload.append('password', formData.password);
+            dataPayload.append('password_confirmation', formData.password_confirmation);
+
+            if (formData.profile_photo_url) {
+                dataPayload.append('profile_photo_url', formData.profile_photo_url);
             }
-        } catch (error) { setMessage(error.response?.data?.message || 'Failed to save profile.'); }
+
+            if (accountType === 'VENDOR') {
+                dataPayload.append('business_name', formData.business_name);
+                dataPayload.append('service_type', formData.service_type);
+                dataPayload.append('address', formData.address);
+                if (files.business_license) dataPayload.append('business_license', files.business_license);
+                if (files.business_certificate) dataPayload.append('business_certificate', files.business_certificate);
+            }
+
+            const res = await api.post('/auth/complete-registration', dataPayload, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            if (res.data.success) {
+                const { token, user } = res.data.data;
+
+                // 1. Save the NEW real token
+                localStorage.setItem('harusiyangu_token', token);
+
+                // 2. Clear the modal
+                handleCloseAuth();
+
+                // 3. FORCE RELOAD TO / (Root)
+                // We send user to root, and App.js will decide where to go based on role
+                window.location.href = '/';
+            }
+        } catch (error) {
+            console.error(error);
+            setMessage(error.response?.data?.message || 'Failed to save profile.');
+        }
         finally { setLoading(false); }
     };
 
     return (
         <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900">
-            
+
             {/* --- NAVBAR --- */}
             <nav className="fixed w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-sm">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({top:0, behavior:'smooth'})}>
-                        {/* <div className="w-10 h-10 bg-[#1e3a8a] rounded-lg flex items-center justify-center text-white font-serif text-xl font-bold shadow-md">H</div>
+                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                        <div className="w-10 h-10 bg-[#1e3a8a] rounded-lg flex items-center justify-center text-white font-serif text-xl font-bold shadow-md">H</div>
                         <div className="flex flex-col">
                             <span className="text-xl font-bold tracking-tight text-slate-900 leading-none">HarusiYangu</span>
                             <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Event Platform</span>
-                        </div> */}
+                        </div>
                     </div>
                     <div className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-600">
                         <a href="#features" className="hover:text-blue-900 transition-colors">Features</a>
@@ -176,7 +265,6 @@ const LandingPage = () => {
                         </div>
                     </div>
                     <div className="relative lg:h-[600px] w-full rounded-2xl overflow-hidden shadow-2xl animate-scale-in">
-                        {/* HERO IMAGE: Uses the local file WEDDING1.webp */}
                         <img src={ASSETS.hero} alt="Wedding Setup" className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/20 to-transparent"></div>
                     </div>
@@ -207,55 +295,34 @@ const LandingPage = () => {
                 </div>
             </section>
 
-            {/* --- CELEBRATION SLIDER (UPDATED WITH LOCAL IMAGES) --- */}
+            {/* --- CELEBRATION SLIDER --- */}
             <section id="celebrations" className="py-24 px-6 bg-slate-50 overflow-hidden">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-16">
                         <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">For Every Celebration</h2>
                         <p className="text-slate-500 text-lg">Our platform adapts to the unique needs of every Tanzanian event type.</p>
                     </div>
-
                     <div className="relative bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 h-[500px] md:h-[600px]">
-                        {/* Navigation Arrows */}
                         <button onClick={prevSlide} className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-white/90 hover:bg-white text-slate-900 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"><ChevronLeft size={24} /></button>
                         <button onClick={nextSlide} className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-white/90 hover:bg-white text-slate-900 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"><ChevronRight size={24} /></button>
-                        
-                        {/* Slider Container */}
                         <div className="relative w-full h-full flex items-center">
                             {ASSETS.celebrations.map((slide, index) => (
-                                <div 
-                                    key={index}
-                                    className={`absolute inset-0 transition-all duration-700 ease-in-out flex flex-col md:flex-row ${index === currentSlide ? 'opacity-100 translate-x-0 z-10' : 'opacity-0 translate-x-full z-0'}`}
-                                >
-                                    {/* Image Side */}
-                                    <div className="w-full md:w-3/5 h-64 md:h-full overflow-hidden bg-slate-200">
-                                        <img src={slide.img} alt={slide.title} className="w-full h-full object-cover" />
-                                    </div>
-                                    {/* Text Side */}
+                                <div key={index} className={`absolute inset-0 transition-all duration-700 ease-in-out flex flex-col md:flex-row ${index === currentSlide ? 'opacity-100 translate-x-0 z-10' : 'opacity-0 translate-x-full z-0'}`}>
+                                    <div className="w-full md:w-3/5 h-64 md:h-full overflow-hidden bg-slate-200"><img src={slide.img} alt={slide.title} className="w-full h-full object-cover" /></div>
                                     <div className="w-full md:w-2/5 p-8 md:p-16 flex flex-col justify-center bg-white">
                                         <h3 className="text-3xl md:text-4xl font-bold text-slate-900 mb-6">{slide.title}</h3>
                                         <p className="text-lg text-slate-600 leading-relaxed mb-8">{slide.desc}</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {['Budgeting', 'Guest List', 'Invites'].map(tag => (
-                                                <span key={tag} className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold uppercase rounded-full">{tag}</span>
-                                            ))}
-                                        </div>
+                                        <div className="flex flex-wrap gap-2">{['Budgeting', 'Guest List', 'Invites'].map(tag => (<span key={tag} className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold uppercase rounded-full">{tag}</span>))}</div>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        
-                        {/* Indicators */}
-                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex gap-3">
-                            {ASSETS.celebrations.map((_, idx) => (
-                                <button key={idx} onClick={() => setCurrentSlide(idx)} className={`w-3 h-3 rounded-full transition-all ${idx === currentSlide ? 'bg-blue-900 w-8' : 'bg-slate-300'}`} />
-                            ))}
-                        </div>
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex gap-3">{ASSETS.celebrations.map((_, idx) => (<button key={idx} onClick={() => setCurrentSlide(idx)} className={`w-3 h-3 rounded-full transition-all ${idx === currentSlide ? 'bg-blue-900 w-8' : 'bg-slate-300'}`} />))}</div>
                     </div>
                 </div>
             </section>
 
-            {/* --- HOW IT WORKS (FROM DOCS) --- */}
+            {/* --- HOW IT WORKS --- */}
             <section id="how-it-works" className="py-24 px-6 bg-white">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-20">
@@ -263,25 +330,23 @@ const LandingPage = () => {
                         <p className="text-slate-500 text-lg">A streamlined workflow from planning to execution.</p>
                     </div>
                     <div className="grid md:grid-cols-3 gap-12 relative">
-                        {/* Connecting Line (Desktop) */}
                         <div className="hidden md:block absolute top-12 left-0 w-full h-0.5 bg-slate-200 -z-10"></div>
-                        
                         {[
-                            { icon: <User size={32} />, title: "1. Create Event", desc: "Sign up and create your event profile. Add committee members and set your initial budget." },
-                            { icon: <Zap size={32} />, title: "2. Manage & Automate", desc: "Send digital invitations, record contributions, and track vendor payments automatically." },
-                            { icon: <Globe size={32} />, title: "3. Celebrate", desc: "Use QR codes for gate access. Post-event, view analytics and send thank-you messages." }
-                        ].map((step, i) => (
+                            { icon: <User size={32} />, title: "1. Create Account", desc: "Sign up as a Host or Vendor and verify your phone number." },
+                            { icon: <Zap size={32} />, title: "2. Setup Profile", desc: "Hosts create events; Vendors upload docs & list services." },
+                            { icon: <Globe size={32} />, title: "3. Connect", desc: "Hosts find and book vendors. Manage everything in one place." }
+                        ].map((stepItem, i) => (
                             <div key={i} className="text-center relative">
-                                <div className="w-24 h-24 mx-auto bg-white border-4 border-slate-100 rounded-full flex items-center justify-center text-blue-900 mb-6 shadow-md">{step.icon}</div>
-                                <h3 className="text-xl font-bold text-slate-900 mb-3">{step.title}</h3>
-                                <p className="text-slate-500 leading-relaxed">{step.desc}</p>
+                                <div className="w-24 h-24 mx-auto bg-white border-4 border-slate-100 rounded-full flex items-center justify-center text-blue-900 mb-6 shadow-md">{stepItem.icon}</div>
+                                <h3 className="text-xl font-bold text-slate-900 mb-3">{stepItem.title}</h3>
+                                <p className="text-slate-500 leading-relaxed">{stepItem.desc}</p>
                             </div>
                         ))}
                     </div>
                 </div>
             </section>
 
-            {/* --- WHY CHOOSE US (DOCUMENTATION) --- */}
+            {/* --- WHY CHOOSE US --- */}
             <section className="py-24 px-6 bg-[#0f172a] text-white">
                 <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
                     <div>
@@ -303,41 +368,60 @@ const LandingPage = () => {
                     </div>
                     <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700">
                         <div className="flex items-center gap-4 mb-6">
-                            {/* <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-2xl font-bold">H</div> */}
-                            <div>
-                                <h3 className="font-bold text-lg">Ready to Start?</h3>
-                                <p className="text-slate-400 text-sm">Join thousands of event hosts.</p>
-                            </div>
+                            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-2xl font-bold">H</div>
+                            <div><h3 className="font-bold text-lg">Ready to Start?</h3><p className="text-slate-400 text-sm">Join thousands of event hosts.</p></div>
                         </div>
                         <button onClick={() => handleOpenAuth('register')} className="w-full bg-white text-slate-900 font-bold py-3 rounded-lg hover:bg-blue-50 transition-colors">Get Started Free</button>
                     </div>
                 </div>
             </section>
 
-            {/* --- AUTH MODAL (PRESERVED) --- */}
+            {/* --- AUTH MODAL --- */}
             {isAuthModalOpen && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row relative animate-scale-up">
                         <button onClick={handleCloseAuth} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-600 z-20 hidden md:block"><CloseIcon size={18} /></button>
                         <div className="hidden md:flex md:w-2/5 bg-[#0f172a] text-white p-12 flex flex-col justify-between relative overflow-hidden">
                             <div className="relative z-10">
-                                {/* <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center text-2xl font-bold mb-8">H</div> */}
-                                <h3 className="text-2xl font-bold mb-4">{authMode === 'login' ? 'Welcome Back.' : 'Join the Platform.'}</h3>
-                                <p className="text-slate-400 text-sm leading-relaxed mb-8">{authMode === 'login' ? "Access your event dashboard, manage your contributions, and stay updated with your committee." : "Create your account and start planning your event with the most advanced tools available."}</p>
+                                <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center text-2xl font-bold mb-8">H</div>
+                                <h3 className="text-2xl font-bold mb-4">{authMode === 'login' ? 'Welcome Back.' : (accountType === 'VENDOR' ? 'Join as Vendor.' : 'Join the Platform.')}</h3>
+                                <p className="text-slate-400 text-sm leading-relaxed mb-8">
+                                    {authMode === 'login'
+                                        ? "Access your event dashboard, manage your contributions, and stay updated with your committee."
+                                        : (accountType === 'VENDOR'
+                                            ? "Create your vendor profile, upload documents, and get discovered by thousands of event hosts."
+                                            : "Create your account and start planning your event with the most advanced tools available.")
+                                    }
+                                </p>
                             </div>
                             <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-20 transform translate-x-1/2 translate-y-1/2"></div>
                         </div>
-                        <div className="w-full md:w-3/5 p-8 md:p-12 bg-white flex flex-col justify-center relative">
+                        <div className="w-full md:w-3/5 p-6 md:p-8 bg-white flex flex-col justify-center relative max-h-[90vh] overflow-y-auto">
                             <button onClick={handleCloseAuth} className="md:hidden absolute top-4 right-4 text-slate-400"><CloseIcon size={24} /></button>
                             <div className="max-w-md mx-auto w-full">
-                                <div className="text-right mb-8">
-                                    {authMode === 'login' ? <span className="text-sm text-slate-500">New to HarusiYangu? <button onClick={() => handleSwitchMode('register')} className="text-blue-900 font-bold hover:underline">Create Account</button></span> : <span className="text-sm text-slate-500">Already have an account? <button onClick={() => handleSwitchMode('login')} className="text-blue-900 font-bold hover:underline">Log In</button></span>}
+                                <div className="text-right mb-6">
+                                    {authMode === 'login' ?
+                                        <span className="text-sm text-slate-500">New to HarusiYangu? <button onClick={() => handleSwitchMode('register')} className="text-blue-900 font-bold hover:underline">Create Account</button></span> :
+                                        <span className="text-sm text-slate-500">Already have an account? <button onClick={() => handleSwitchMode('login')} className="text-blue-900 font-bold hover:underline">Log In</button></span>
+                                    }
                                 </div>
-                                {message && <div className={`p-3 rounded-lg mb-6 text-xs font-medium flex items-center gap-2 ${message.includes('sent') || message.includes('verified') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>{message.includes('suspended') ? <Lock size={14} /> : <Check size={14} />}<span>{message}</span></div>}
+                                {message && <div className={`p-3 rounded-lg mb-4 text-xs font-medium flex items-center gap-2 ${message.includes('sent') || message.includes('verified') || message.includes('Welcome') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>{message.includes('suspended') ? <Lock size={14} /> : <Check size={14} />}<span>{message}</span></div>}
+
                                 {step === 1 && (
                                     <div className="animate-fade-in-up">
                                         <h4 className="text-2xl font-bold text-slate-900 mb-2">{authMode === 'login' ? 'Login' : 'Register'}</h4>
-                                        <p className="text-slate-500 text-sm mb-8">Enter your phone number to receive a verification code.</p>
+                                        <p className="text-slate-500 text-sm mb-6">Enter your phone number to receive a verification code.</p>
+
+                                        {authMode === 'register' && (
+                                            <div className="mb-6">
+                                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">I am a:</label>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <button type="button" onClick={() => setAccountType('HOST')} className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg border text-sm font-medium transition-all ${accountType === 'HOST' ? 'border-blue-900 bg-blue-50 text-blue-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}><User size={18} /> Event Host</button>
+                                                    <button type="button" onClick={() => setAccountType('VENDOR')} className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg border text-sm font-medium transition-all ${accountType === 'VENDOR' ? 'border-blue-900 bg-blue-50 text-blue-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}><Store size={18} /> Service Vendor</button>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <form onSubmit={handleRequestOtp} className="space-y-6">
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Phone Number</label>
@@ -352,8 +436,8 @@ const LandingPage = () => {
                                 )}
                                 {step === 2 && (
                                     <div className="animate-fade-in-up">
-                                        <div className="mb-8">
-                                            <button onClick={() => setStep(1)} className="text-slate-400 hover:text-slate-600 text-sm font-medium flex items-center gap-1 mb-4"><ArrowRight size={16} className="rotate-180"/> Change Number</button>
+                                        <div className="mb-6">
+                                            <button onClick={() => setStep(1)} className="text-slate-400 hover:text-slate-600 text-sm font-medium flex items-center gap-1 mb-4"><ArrowRight size={16} className="rotate-180" /> Change Number</button>
                                             <h4 className="text-2xl font-bold text-slate-900">Verify Phone</h4>
                                             <p className="text-slate-500 text-sm mt-1">We sent a code to {phone}</p>
                                         </div>
@@ -371,26 +455,80 @@ const LandingPage = () => {
                                 )}
                                 {step === 3 && authMode === 'register' && (
                                     <div className="animate-fade-in-up space-y-4">
-                                        <h4 className="text-2xl font-bold text-slate-900 mb-6">Complete Profile</h4>
+                                        <h4 className="text-2xl font-bold text-slate-900 mb-4">Complete Profile</h4>
                                         <form onSubmit={handleCompleteProfile} className="space-y-4">
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div><label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">First Name</label><input type="text" value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm font-medium" required /></div>
-                                                <div><label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Last Name</label><input type="text" value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm font-medium" required /></div>
+
+                                            {/* --- PERSONAL INFO (2 Cols) --- */}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">First Name</label><input type="text" value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" required /></div>
+                                                <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Last Name</label><input type="text" value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" required /></div>
                                             </div>
-                                            <div><label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Email</label><div className="relative"><span className="absolute left-4 top-3.5 text-slate-400"><Mail size={18} /></span><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm font-medium" /></div></div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Profile Photo</label>
-                                                <div className="mt-1 flex justify-center px-4 pt-4 pb-4 border-2 border-dashed border-slate-200 rounded-lg hover:bg-slate-50 transition-colors relative">
-                                                    <div className="space-y-1 text-center">
-                                                        {imagePreview ? (<div className="relative inline-block"><img src={imagePreview} alt="Preview" className="h-20 w-20 rounded-full object-cover border-2 border-blue-900 shadow-md" /><button type="button" onClick={removeImage} className="absolute top-0 right-0 bg-slate-900 text-white rounded-full p-1 hover:bg-red-500"><CloseIcon size={12} /></button></div>) : (<><Image className="mx-auto h-8 w-8 text-slate-400" /><div className="flex text-sm text-slate-600"><label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-900 hover:text-blue-700"><span>Upload Photo</span><input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} /></label></div></>)}
+                                            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Email</label><div className="relative"><span className="absolute left-3 top-2.5 text-slate-400"><Mail size={16} /></span><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" /></div></div>
+
+                                            {/* --- VENDOR SPECIFIC (COMPACT GRID) --- */}
+                                            {accountType === 'VENDOR' && (
+                                                <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-100 space-y-3 animate-fade-in">
+                                                    <div className="flex items-center gap-2 text-blue-900 font-bold text-xs mb-1"><Briefcase size={14} /> Business Details</div>
+
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Business Name</label>
+                                                            <input type="text" value={formData.business_name} onChange={(e) => setFormData({ ...formData, business_name: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white" placeholder="e.g. Royal Catering" required />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Service Type</label>
+                                                            <select value={formData.service_type} onChange={(e) => setFormData({ ...formData, service_type: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white" required>
+                                                                {VENDOR_SERVICES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Address</label>
+                                                        <input type="text" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white" placeholder="City, Street..." />
+                                                    </div>
+
+                                                    {/* --- DOCUMENT UPLOADS (SIDE BY SIDE) --- */}
+                                                    <div className="grid grid-cols-2 gap-3 pt-2">
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">License (PDF/Img)</label>
+                                                            <div className="relative">
+                                                                <input type="file" id="license_upload" className="hidden" accept="image/*,.pdf" onChange={(e) => setFiles({ ...files, business_license: e.target.files[0] })} />
+                                                                <label htmlFor="license_upload" className={`flex items-center justify-center gap-2 w-full px-3 py-2 border-2 border-dashed rounded-lg cursor-pointer text-xs transition-colors ${files.business_license ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50 text-slate-500'}`}>
+                                                                    <FileText size={14} /> {files.business_license ? files.business_license.name : 'Upload License'}
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Certificate (PDF/Img)</label>
+                                                            <div className="relative">
+                                                                <input type="file" id="cert_upload" className="hidden" accept="image/*,.pdf" onChange={(e) => setFiles({ ...files, business_certificate: e.target.files[0] })} />
+                                                                <label htmlFor="cert_upload" className={`flex items-center justify-center gap-2 w-full px-3 py-2 border-2 border-dashed rounded-lg cursor-pointer text-xs transition-colors ${files.business_certificate ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50 text-slate-500'}`}>
+                                                                    <FileText size={14} /> {files.business_certificate ? files.business_certificate.name : 'Upload Cert'}
+                                                                </label>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
+                                            )}
+
+                                            {/* --- PROFILE PHOTO & PASSWORD (2 COLS) --- */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                                <div>
+                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Profile Photo</label>
+                                                    <div className="flex items-center gap-3">
+                                                        {imagePreview ? <img src={imagePreview} className="h-10 w-10 rounded-full object-cover border" /> : <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center"><Image size={16} className="text-slate-400" /></div>}
+                                                        <label className="text-xs text-blue-900 font-medium cursor-pointer hover:underline">
+                                                            <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} /> Change Photo
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Password</label><input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" required /></div>
+                                                    <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Confirm</label><input type="password" value={formData.password_confirmation} onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" required /></div>
+                                                </div>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div><label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Password</label><input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm font-medium" required /></div>
-                                                <div><label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Confirm</label><input type="password" value={formData.password_confirmation} onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm font-medium" required /></div>
-                                            </div>
-                                            <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-lg shadow-md hover:shadow-lg transition-all mt-2">{loading ? <RefreshCw className="animate-spin inline mr-2" size={20} /> : <span>Create Account</span>}</button>
+
+                                            <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-lg shadow-md hover:shadow-lg transition-all mt-2 text-sm">{loading ? <RefreshCw className="animate-spin inline mr-2" size={16} /> : <span>Create {accountType === 'VENDOR' ? 'Vendor' : 'Account'}</span>}</button>
                                         </form>
                                     </div>
                                 )}
@@ -400,42 +538,25 @@ const LandingPage = () => {
                 </div>
             )}
 
-            {/* --- PROFESSIONAL FOOTER --- */}
+            {/* --- FOOTER --- */}
             <footer className="bg-[#0f172a] text-white pt-16 pb-8 px-6 border-t border-slate-800">
                 <div className="max-w-7xl mx-auto">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2">
-                                {/* <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center font-bold">H</div> */}
-                                <span className="text-xl font-bold">HarusiYangu</span>
-                            </div>
-                            <p className="text-slate-400 text-sm leading-relaxed">The digital transformation of Tanzanian social event culture, combining financial transparency, automation, and community engagement.</p>
+                            <div className="flex items-center gap-2"><div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center font-bold">H</div><span className="text-xl font-bold">HarusiYangu</span></div>
+                            <p className="text-slate-400 text-sm leading-relaxed">The digital transformation of Tanzanian social event culture.</p>
                         </div>
                         <div>
                             <h4 className="font-bold mb-4 text-white">Platform</h4>
-                            <ul className="space-y-2 text-sm text-slate-400">
-                                <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Pricing</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Security</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Roadmap</a></li>
-                            </ul>
+                            <ul className="space-y-2 text-sm text-slate-400"><li><a href="#" className="hover:text-white transition-colors">About Us</a></li><li><a href="#" className="hover:text-white transition-colors">Pricing</a></li></ul>
                         </div>
                         <div>
                             <h4 className="font-bold mb-4 text-white">Support</h4>
-                            <ul className="space-y-2 text-sm text-slate-400">
-                                <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Status</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">API Documentation</a></li>
-                            </ul>
+                            <ul className="space-y-2 text-sm text-slate-400"><li><a href="#" className="hover:text-white transition-colors">Help Center</a></li><li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li></ul>
                         </div>
                         <div>
                             <h4 className="font-bold mb-4 text-white">Legal</h4>
-                            <ul className="space-y-2 text-sm text-slate-400">
-                                <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Cookie Policy</a></li>
-                            </ul>
+                            <ul className="space-y-2 text-sm text-slate-400"><li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li><li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li></ul>
                         </div>
                     </div>
                     <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
