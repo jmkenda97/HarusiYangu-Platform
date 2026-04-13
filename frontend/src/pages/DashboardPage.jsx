@@ -5,7 +5,8 @@ import {
   LayoutDashboard, CreditCard, Users, Plus, Activity, 
   TrendingUp, Server, Calendar, ArrowRight, Phone, 
   CheckCircle, Clock, MapPin, Wallet, Calculator, ScanLine,
-  UserCheck, Settings, Briefcase, FileText, Loader2
+  UserCheck, Settings, Briefcase, FileText, Loader2, Store,
+  Building2, Package, FileCheck, FileX, Shield
 } from 'lucide-react';
 
 
@@ -140,6 +141,7 @@ const DashboardPage = () => {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [users, setUsers] = useState([]);
   const [events, setEvents] = useState([]);
+  const [vendorStats, setVendorStats] = useState({ total: 0, pending: 0, active: 0, blacklisted: 0 });
 
   // Fetch Data
   useEffect(() => {
@@ -151,6 +153,22 @@ const DashboardPage = () => {
 
         const eventsRes = await api.get('/events');
         const basicEvents = eventsRes.data.data || [];
+
+        // Fetch vendor stats for SUPER_ADMIN
+        if (user?.role === 'SUPER_ADMIN') {
+          try {
+            const vendorsRes = await api.get('/admin/vendors');
+            const vendors = vendorsRes.data.data || [];
+            setVendorStats({
+              total: vendors.length,
+              pending: vendors.filter(v => v.status === 'PENDING_APPROVAL').length,
+              active: vendors.filter(v => v.status === 'ACTIVE').length,
+              blacklisted: vendors.filter(v => v.status === 'BLACKLISTED').length
+            });
+          } catch (err) {
+            console.error("Failed to load vendor stats", err);
+          }
+        }
 
         if (basicEvents.length === 0) {
             setEvents([]);
@@ -206,7 +224,6 @@ const DashboardPage = () => {
     return { totalGuests, totalPledged, totalCollected, totalContributors };
   }, [myEvents]);
 
-  const formatCurrency = (amount) => new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS' }).format(amount);
   const formatDate = (dateString) => {
       if (!dateString) return 'TBD';
       return new Date(dateString).toLocaleDateString('en-TZ', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -265,6 +282,51 @@ const DashboardPage = () => {
                   <p className="text-xs text-slate-400 mt-2">{idx === 0 ? 'Active Accounts' : idx === 1 ? 'Scheduled Events' : ''}</p>
                 </div>
               ))}
+            </div>
+
+            {/* Vendor Management Stats */}
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Vendor Management</h3>
+                <button 
+                  onClick={() => window.location.href='/admin/vendors'}
+                  className="text-sm text-brand-600 dark:text-brand-400 font-medium hover:text-brand-700 flex items-center gap-1"
+                >
+                  Manage Vendors <ArrowRight size={14} />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Store size={16} className="text-blue-600 dark:text-blue-400" />
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Total Vendors</span>
+                    </div>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white">{vendorStats.total}</p>
+                  </div>
+                  <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock size={16} className="text-amber-600 dark:text-amber-400" />
+                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase">Pending</span>
+                    </div>
+                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{vendorStats.pending}</p>
+                  </div>
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle size={16} className="text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase">Active</span>
+                    </div>
+                    <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{vendorStats.active}</p>
+                  </div>
+                  <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Shield size={16} className="text-red-600 dark:text-red-400" />
+                      <span className="text-xs font-medium text-red-600 dark:text-red-400 uppercase">Blacklisted</span>
+                    </div>
+                    <p className="text-2xl font-bold text-red-600 dark:text-red-400">{vendorStats.blacklisted}</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -555,7 +617,12 @@ const DashboardPage = () => {
         )}
 
         {/* ========================================= */}
-        {/* 7. GENERIC COMMITTEE MEMBER FALLBACK */}
+        {/* 7. VENDOR DASHBOARD */}
+        {/* ========================================= */}
+        {user?.role === 'VENDOR' && <VendorDashboardSummary />}
+
+        {/* ========================================= */}
+        {/* 8. GENERIC COMMITTEE MEMBER FALLBACK */}
         {/* ========================================= */}
         {(user?.role === 'COMMITTEE_MEMBER' && user?.role !== 'TREASURER' && user?.role !== 'SECRETARY' && user?.role !== 'COORDINATOR' && user?.role !== 'GATE_OFFICER') && (
             <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
@@ -570,5 +637,155 @@ const DashboardPage = () => {
     </div>
   );
 };
+
+// --- SHARED UTILITY ---
+const formatCurrency = (amount) => new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS' }).format(amount || 0);
+
+// --- VENDOR DASHBOARD SUMMARY COMPONENT ---
+const VendorDashboardSummary = React.memo(() => {
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState(null);
+
+    useEffect(() => {
+        const fetchVendorData = async () => {
+            try {
+                const res = await api.get('/vendors/dashboard');
+                setData(res.data.data);
+            } catch (err) {
+                console.error('Failed to fetch vendor dashboard data', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchVendorData();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <Loader2 className="animate-spin text-brand-600" size={32} />
+            </div>
+        );
+    }
+
+    if (!data) {
+        return (
+            <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                <Building2 className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600 mb-4" />
+                <h3 className="text-lg font-medium text-slate-900 dark:text-white">Vendor Dashboard</h3>
+                <p className="text-slate-500 dark:text-slate-400 mt-2">Complete your vendor profile to see your dashboard.</p>
+                <button onClick={() => window.location.href='/vendor/profile'} className="mt-4 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors">
+                    Complete Profile
+                </button>
+            </div>
+        );
+    }
+
+    const { profile, services, documents, events, financials } = data;
+    const approvedDocs = documents?.filter(d => d.verification_status === 'APPROVED').length || 0;
+    const pendingDocs = documents?.filter(d => d.verification_status === 'PENDING').length || 0;
+
+    const getStatusBadge = (status) => {
+        const styles = {
+            PENDING_APPROVAL: 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
+            ACTIVE: 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
+            INACTIVE: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+            BLACKLISTED: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
+        };
+        return (
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${styles[status] || styles.INACTIVE}`}>
+                {status === 'ACTIVE' && <CheckCircle size={12} />}
+                {status === 'PENDING_APPROVAL' && <Clock size={12} />}
+                {status.replace('_', ' ')}
+            </span>
+        );
+    };
+
+    return (
+        <div className="space-y-6">
+            {/* Stats Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase">Profile Status</h3>
+                        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg">
+                            <Building2 size={20}/>
+                        </div>
+                    </div>
+                    {getStatusBadge(profile?.verification_status || 'PENDING_APPROVAL')}
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase">Services</h3>
+                        <div className="p-2 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg">
+                            <Package size={20}/>
+                        </div>
+                    </div>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{services?.length || 0}</p>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase">Pending Documents</h3>
+                        <div className="p-2 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg">
+                            <FileText size={20}/>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <p className="text-3xl font-bold text-slate-900 dark:text-white">{pendingDocs}</p>
+                        <span className="text-xs text-slate-400">/ {documents?.length || 0} total</span>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase">Assigned Events</h3>
+                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                            <Calendar size={20}/>
+                        </div>
+                    </div>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{events?.length || 0}</p>
+                </div>
+            </div>
+
+            {/* Earnings Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase">Total Earnings</h3>
+                        <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg">
+                            <Wallet size={20}/>
+                        </div>
+                    </div>
+                    <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(financials?.total_earnings)}</p>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase">Pending Balance</h3>
+                        <div className="p-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg">
+                            <TrendingUp size={20}/>
+                        </div>
+                    </div>
+                    <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(financials?.pending_balance)}</p>
+                </div>
+            </div>
+
+            {/* Quick Links */}
+            <div className="bg-gradient-to-r from-brand-600 to-brand-800 rounded-xl p-6 text-white shadow-lg">
+                <h3 className="text-lg font-bold mb-4">Vendor Quick Links</h3>
+                <div className="flex flex-wrap gap-3">
+                    <a href="/vendor/dashboard" className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                        <Building2 size={16} /> Full Dashboard
+                    </a>
+                    <a href="/vendor/profile" className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                        <Package size={16} /> Manage Profile
+                    </a>
+                </div>
+            </div>
+        </div>
+    );
+});
 
 export default DashboardPage;

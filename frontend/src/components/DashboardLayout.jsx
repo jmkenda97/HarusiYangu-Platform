@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, Settings, Calendar, Home, PanelLeftClose, PanelLeftOpen, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, Settings, Calendar, Home, PanelLeftClose, PanelLeftOpen, Moon, Sun, Store, Building2, Package } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -9,6 +9,15 @@ const menuItems = [
     { name: 'My Events', icon: Calendar, path: '/events' },
     { name: 'My Profile', icon: User, path: '/profile' },
     { name: 'Users', icon: Users, path: '/users' },
+    { name: 'Vendors', icon: Store, path: '/admin/vendors' },
+    // --- HOST: Vendor Catalog ---
+    { name: 'Vendor Catalog', icon: Store, path: '/vendor-catalog' },
+];
+
+// Vendor-specific menu items
+const vendorMenuItems = [
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/vendor/dashboard' },
+    { name: 'My Profile', icon: Building2, path: '/vendor/profile' },
 ];
 
 const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggleDesktopCollapse, handleLogout }) => {
@@ -25,6 +34,10 @@ const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggl
             else if (path === '/events') setHeaderTitle('My Events');
             else if (path === '/users') setHeaderTitle('User Management');
             else if (path === '/profile') setHeaderTitle('My Profile');
+            else if (path === '/admin/vendors') setHeaderTitle('Vendor Management');
+            else if (path === '/vendor-catalog') setHeaderTitle('Vendor Catalog');
+            else if (path === '/vendor/dashboard') setHeaderTitle('Vendor Dashboard');
+            else if (path === '/vendor/profile') setHeaderTitle('Vendor Profile');
             else if (path.match(/^\/events\/[a-f0-9-]+$/)) setHeaderTitle('Event Details');
             else setHeaderTitle(path.replace('/', '').replace('/', ' ').replace(/\b\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1)));
         }
@@ -46,13 +59,50 @@ const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggl
 
             {/* Navigation Links */}
             <nav className={`flex-1 mt-6 ${isDesktopCollapsed ? 'px-2' : 'px-4'} space-y-2`}>
-                {menuItems.map((item) => {
+                {/* VENDOR NAVIGATION */}
+                {user?.role === 'VENDOR' && vendorMenuItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location.pathname === item.path;
+
+                    return (
+                        <Link
+                            key={item.path}
+                            to={item.path}
+                            onClick={() => setSidebarOpen(false)}
+                            title={isDesktopCollapsed ? item.name : ''}
+                            className={`
+                                flex items-center ${isDesktopCollapsed ? 'justify-center px-2' : 'px-4'} py-3 text-sm font-medium rounded-lg transition-colors duration-200 group relative
+                                ${isActive
+                                    ? 'bg-brand-600 text-white shadow-lg shadow-brand-900/50'
+                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                                }
+                            `}
+                        >
+                            <Icon size={20} className={isDesktopCollapsed ? '' : 'mr-3'} />
+                            {!isDesktopCollapsed && (
+                                <>
+                                    {item.name}
+                                    {isActive && <ChevronRight size={16} className="ml-auto" />}
+                                </>
+                            )}
+                        </Link>
+                    );
+                })}
+
+                {/* STANDARD NAVIGATION (Non-Vendor) */}
+                {user?.role !== 'VENDOR' && menuItems.map((item) => {
                     if (item.name === 'Users' && user?.role !== 'SUPER_ADMIN') return null;
                     
                     // --- ADDED THIS LINE TO HIDE "MY EVENTS" FOR SUPER ADMIN ---
                     if (item.name === 'My Events' && user?.role === 'SUPER_ADMIN') return null;
 
                     if (item.name === 'My Profile' && user?.role !== 'HOST') return null;
+
+                    // --- VENDORS: Only for SUPER_ADMIN and ADMIN ---
+                    if (item.name === 'Vendors' && user?.role !== 'SUPER_ADMIN' && user?.role !== 'ADMIN') return null;
+
+                    // --- HOST: Vendor Catalog - Only for HOST ---
+                    if (item.name === 'Vendor Catalog' && user?.role !== 'HOST') return null;
 
                     const Icon = item.icon;
                     const isActive = location.pathname === item.path;

@@ -7,6 +7,13 @@ use App\Http\Controllers\Api\EventContributorController;
 use App\Http\Controllers\Api\EventPaymentController;
 use App\Http\Controllers\Api\EventContactController;
 use App\Http\Controllers\Api\EventBudgetController;
+use App\Http\Controllers\Api\AdminVendorController;
+use App\Http\Controllers\Api\VendorCatalogController;
+use App\Http\Controllers\Api\EventVendorController;
+// Vendor Self-Management Controllers (Task #2)
+use App\Http\Controllers\Api\VendorController;
+use App\Http\Controllers\Api\VendorServiceController;
+use App\Http\Controllers\Api\VendorDocumentController;
 // CORRECTED IMPORT: NO 'Api\' BECAUSE CONTROLLER IS IN app/Http/Controllers
 use App\Http\Controllers\EventCommitteeController;
 
@@ -77,6 +84,58 @@ Route::prefix('v1')->group(function () {
 
             // Budget Management
             Route::apiResource('budget', EventBudgetController::class)->only(['index', 'store', 'update', 'destroy']);
+
+            // ==========================================
+            // VENDOR ASSIGNMENT ROUTES (Task #4)
+            // ==========================================
+            Route::get('/vendors', [EventVendorController::class, 'index']);
+            Route::post('/vendors', [EventVendorController::class, 'store']);
+            Route::put('/vendors/{id}', [EventVendorController::class, 'update']);
+            Route::delete('/vendors/{id}', [EventVendorController::class, 'destroy']);
+        });
+
+        // ==========================================
+        // VENDOR CATALOG ROUTES (Task #4)
+        // Public vendor browsing for all authenticated users
+        // ==========================================
+        Route::prefix('vendor-catalog')->group(function () {
+            Route::get('/', [VendorCatalogController::class, 'index']);
+            Route::get('/{id}', [VendorCatalogController::class, 'show']);
+        });
+
+        // ==========================================
+        // ADMIN VENDOR MANAGEMENT ROUTES
+        // ==========================================
+        Route::prefix('admin/vendors')->group(function () {
+            Route::get('/', [AdminVendorController::class, 'index']);
+            Route::get('/{id}', [AdminVendorController::class, 'show']);
+            Route::put('/{id}/approve', [AdminVendorController::class, 'approve']);
+            Route::put('/{id}/reject', [AdminVendorController::class, 'reject']);
+            Route::put('/{id}/block', [AdminVendorController::class, 'block']);
+            Route::put('/{id}/unblock', [AdminVendorController::class, 'unblock']);
+            Route::put('/{vendorId}/documents/{docId}/review', [AdminVendorController::class, 'reviewDocument']);
+        });
+
+        // ==========================================
+        // VENDOR SELF-MANAGEMENT ROUTES (Task #2)
+        // ==========================================
+        Route::prefix('vendors')->group(function () {
+            // Vendor Profile Management
+            Route::get('/profile', [VendorController::class, 'getProfile']);
+            Route::post('/profile', [VendorController::class, 'createProfile']);
+            Route::put('/profile', [VendorController::class, 'updateProfile']);
+            Route::get('/dashboard', [VendorController::class, 'getDashboard']);
+
+            // Vendor Services
+            Route::get('/services', [VendorServiceController::class, 'index']);
+            Route::post('/services', [VendorServiceController::class, 'store']);
+            Route::put('/services/{id}', [VendorServiceController::class, 'update']);
+            Route::delete('/services/{id}', [VendorServiceController::class, 'destroy']);
+
+            // Vendor Documents
+            Route::get('/documents', [VendorDocumentController::class, 'index']);
+            Route::post('/documents', [VendorDocumentController::class, 'store']);
+            Route::delete('/documents/{id}', [VendorDocumentController::class, 'destroy']);
         });
     });
 });

@@ -33,6 +33,11 @@ class PermissionSeeder extends Seeder
 
             // Gate Officer Permissions
             'scan-event-qr',
+
+            // Admin Vendor Management Permissions
+            'manage-vendors',
+            'view-vendors',
+            'approve-vendors',
         ];
 
         foreach ($permissions as $permission) {

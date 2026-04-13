@@ -112,4 +112,14 @@ class Event extends Model
     public function committeeMembers() {
     return $this->hasMany(EventCommitteeMember::class, 'event_id');
 }
+
+    public function vendors(): HasMany
+    {
+        return $this->hasMany(EventVendor::class, 'event_id');
+    }
+
+    public function vendorPayments(): HasMany
+    {
+        return $this->hasMany(VendorPayment::class, 'event_id');
+    }
 }

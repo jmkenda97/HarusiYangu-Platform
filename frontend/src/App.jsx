@@ -13,6 +13,12 @@ const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const EventsPage = React.lazy(() => import('./pages/EventsPage'));
 const EventDetailsPage = React.lazy(() => import('./pages/EventDetailsPage'));
 
+// --- HOST: Vendor Catalog ---
+const VendorCatalogPage = React.lazy(() => import('./pages/VendorCatalogPage'));
+const VendorProfilePage = React.lazy(() => import('./pages/VendorProfilePage'));
+const VendorDashboardPage = React.lazy(() => import('./pages/VendorDashboardPage'));
+const AdminVendorsPage = React.lazy(() => import('./pages/AdminVendorsPage'));
+
 function App() {
   return (
     // <--- WRAP EVERYTHING IN THEMEPROVIDER HERE
@@ -51,6 +57,32 @@ function App() {
               <Route path="events/:id" element={
                 <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Event Details...</div>}>
                   <EventDetailsPage />
+                </Suspense>
+              } />
+
+              {/* --- HOST: Vendor Catalog --- */}
+              <Route path="/vendor-catalog" element={
+                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Catalog...</div>}>
+                  <VendorCatalogPage />
+                </Suspense>
+              } />
+              
+              {/* Vendor Routes */}
+              <Route path="/vendor/profile" element={
+                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Profile...</div>}>
+                  <VendorProfilePage />
+                </Suspense>
+              } />
+              <Route path="/vendor/dashboard" element={
+                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Dashboard...</div>}>
+                  <VendorDashboardPage />
+                </Suspense>
+              } />
+
+              {/* Admin Routes */}
+              <Route path="/admin/vendors" element={
+                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendors...</div>}>
+                  <AdminVendorsPage />
                 </Suspense>
               } />
             </Route>

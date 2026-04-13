@@ -5,7 +5,7 @@ import api from '../api/axios';
 import {
     ArrowLeft, Users, Wallet, CreditCard, Plus, ChevronLeft, ChevronRight, CheckCircle, Clock,
     AlertCircle, UserPlus, Trash2, Edit, Crown, Mail, Phone, DollarSign, Calculator, AlertTriangle,
-    Upload, Download, FileSpreadsheet, XCircle, Calendar, Search
+    Upload, Download, FileSpreadsheet, XCircle, Calendar, Search, Store, Star, MapPin, Briefcase
 } from 'lucide-react';
 
 // --- OPTIMIZATION: MOVED PURE FUNCTIONS OUTSIDE COMPONENT ---
@@ -83,6 +83,23 @@ const EventDetailsPage = () => {
     });
     const [editingCommitteeMember, setEditingCommitteeMember] = useState(null);
 
+    // --- VENDOR STATES ---
+    const [vendors, setVendors] = useState([]);
+    const [vendorPage, setVendorPage] = useState(1);
+    const [vendorSearch, setVendorSearch] = useState('');
+    const [showAssignVendorModal, setShowAssignVendorModal] = useState(false);
+    const [showEditVendorModal, setShowEditVendorModal] = useState(false);
+    const [editingVendorAssignment, setEditingVendorAssignment] = useState(null);
+    const [vendorCatalog, setVendorCatalog] = useState([]);
+    const [assignVendorForm, setAssignVendorForm] = useState({
+        vendor_id: '',
+        assigned_service: '',
+        agreed_amount: '',
+        contract_notes: '',
+        start_date: '',
+        end_date: ''
+    });
+
     // --- BULK IMPORT STATES ---
     const [importFile, setImportFile] = useState(null);
     const [importing, setImporting] = useState(false);
@@ -114,6 +131,11 @@ const EventDetailsPage = () => {
                 } else if (activeTab === 'committee') {
                     if (user?.id === event?.owner_user_id || canAccess('manage-event-committee')) {
                         await fetchCommittee();
+                    }
+                } else if (activeTab === 'vendors') {
+                    if (canAccess('view-event-vendors') || user?.id === event?.owner_user_id) {
+                        await fetchVendors();
+                        await fetchVendorCatalog();
                     }
                 }
             } finally {
@@ -305,6 +327,102 @@ const EventDetailsPage = () => {
         catch (err) { alert(err.response?.data?.message || "Failed to remove member"); }
     };
 
+    // --- VENDOR FUNCTIONS ---
+    const fetchVendors = async () => {
+        try {
+            const res = await api.get(`/events/${id}/vendors`);
+            setVendors(res.data.data || []);
+            setVendorPage(1);
+        } catch (err) {
+            console.error("Vendors fetch error", err);
+            setVendors([]);
+        }
+    };
+
+    const fetchVendorCatalog = async () => {
+        try {
+            const res = await api.get('/vendor-catalog');
+            setVendorCatalog(res.data.data || []);
+        } catch (err) {
+            console.error("Vendor catalog fetch error", err);
+            setVendorCatalog([]);
+        }
+    };
+
+    const handleAssignVendor = async (e) => {
+        e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            await api.post(`/events/${id}/vendors`, assignVendorForm);
+            setShowAssignVendorModal(false);
+            setAssignVendorForm({
+                vendor_id: '',
+                assigned_service: '',
+                agreed_amount: '',
+                contract_notes: '',
+                start_date: '',
+                end_date: ''
+            });
+            fetchVendors();
+        } catch (err) {
+            alert(err.response?.data?.message || "Failed to assign vendor");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleUpdateVendor = async (e) => {
+        e.preventDefault();
+        if (isSubmitting || !editingVendorAssignment) return;
+        setIsSubmitting(true);
+        try {
+            await api.put(`/events/${id}/vendors/${editingVendorAssignment.id}`, assignVendorForm);
+            setShowEditVendorModal(false);
+            setEditingVendorAssignment(null);
+            setAssignVendorForm({
+                vendor_id: '',
+                assigned_service: '',
+                agreed_amount: '',
+                contract_notes: '',
+                start_date: '',
+                end_date: ''
+            });
+            fetchVendors();
+        } catch (err) {
+            alert(err.response?.data?.message || "Failed to update vendor assignment");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteVendor = async (vendorId, amountPaid) => {
+        if (parseFloat(amountPaid) > 0) {
+            alert("Cannot remove vendor with recorded payments. Please contact support.");
+            return;
+        }
+        if (!confirm("Are you sure you want to remove this vendor from the event?")) return;
+        try {
+            await api.delete(`/events/${id}/vendors/${vendorId}`);
+            fetchVendors();
+        } catch (err) {
+            alert(err.response?.data?.message || "Failed to remove vendor");
+        }
+    };
+
+    const openEditVendorModal = (vendor) => {
+        setEditingVendorAssignment(vendor);
+        setAssignVendorForm({
+            vendor_id: vendor.vendor_id,
+            assigned_service: vendor.assigned_service || '',
+            agreed_amount: vendor.agreed_amount || '',
+            contract_notes: vendor.contract_notes || '',
+            start_date: vendor.start_date || '',
+            end_date: vendor.end_date || ''
+        });
+        setShowEditVendorModal(true);
+    };
+
     // --- BULK IMPORT FUNCTIONS ---
     const handleFileChange = (e) => {
         if (e.target.files) {
@@ -396,11 +514,16 @@ const EventDetailsPage = () => {
         (c.user?.full_name && c.user.full_name.toLowerCase().includes(committeeSearch.toLowerCase())) ||
         (c.user?.phone && c.user.phone.includes(committeeSearch))
     );
+    const filteredVendors = vendors.filter(v =>
+        (v.vendor?.business_name && v.vendor.business_name.toLowerCase().includes(vendorSearch.toLowerCase())) ||
+        (v.assigned_service && v.assigned_service.toLowerCase().includes(vendorSearch.toLowerCase()))
+    );
 
     const displayedGuests = paginate(filteredGuests, guestPage, itemsPerPage);
     const displayedContributors = paginate(filteredContributors, contributorPage, itemsPerPage);
     const displayedBudget = paginate(filteredBudget, budgetPage, itemsPerPage);
     const displayedCommittee = paginate(filteredCommittee, committeePage, itemsPerPage);
+    const displayedVendors = paginate(filteredVendors, vendorPage, itemsPerPage);
 
     // --- CALCULATIONS ---
     const totalPledged = event?.contacts?.reduce((sum, c) => sum + (parseFloat(c.pledge?.pledge_amount) || 0), 0) || 0;
@@ -410,6 +533,11 @@ const EventDetailsPage = () => {
     const totalContributors = contributorsList.length;
     const paidContributors = contributorsList.filter(c => c.pledge.contribution_status === 'PAID').length;
     const unpaidContributors = totalContributors - paidContributors;
+
+    // Vendor calculations
+    const totalAgreed = vendors.reduce((sum, v) => sum + (parseFloat(v.agreed_amount) || 0), 0);
+    const totalVendorPaid = vendors.reduce((sum, v) => sum + (parseFloat(v.amount_paid) || 0), 0);
+    const totalVendorBalance = vendors.reduce((sum, v) => sum + (parseFloat(v.balance_due) || 0), 0);
 
     const daysRemaining = event ? calculateDaysRemaining(event.event_date) : 0;
     const isOverBudget = totalBudgetPlanned > (event?.target_budget || 0);
@@ -424,6 +552,9 @@ const EventDetailsPage = () => {
     if (canAccess('view-event-budget')) availableTabs.push('budget');
     if (user?.id === event?.owner_user_id || canAccess('manage-event-committee')) {
         availableTabs.push('committee');
+    }
+    if (canAccess('view-event-vendors') || user?.id === event?.owner_user_id) {
+        availableTabs.push('vendors');
     }
 
     if (!availableTabs.includes(activeTab)) {
@@ -683,6 +814,103 @@ const EventDetailsPage = () => {
                 </div>
             )}
 
+            {/* 6. VENDORS */}
+            {activeTab === 'vendors' && (
+                <div className="space-y-4">
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Total Agreed</p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">{formatCurrency(totalAgreed)}</p>
+                            </div>
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full"><DollarSign size={24} /></div>
+                        </div>
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Total Paid</p>
+                                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(totalVendorPaid)}</p>
+                            </div>
+                            <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-full"><CheckCircle size={24} /></div>
+                        </div>
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Total Balance</p>
+                                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{formatCurrency(totalVendorBalance)}</p>
+                            </div>
+                            <div className="p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-full"><Clock size={24} /></div>
+                        </div>
+                    </div>
+
+                    {/* Assigned Vendors List */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div><h3 className="text-lg font-bold text-slate-900 dark:text-white">Assigned Vendors</h3><p className="text-sm text-slate-500 dark:text-slate-400">Manage vendors for this event.</p></div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full lg:w-auto">
+                            <div className="relative w-full sm:w-64">
+                                <Search size={16} className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-500" />
+                                <input type="text" placeholder="Search vendors..." value={vendorSearch} onChange={(e) => setVendorSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white dark:placeholder-slate-500" />
+                            </div>
+                            <button onClick={() => { setAssignVendorForm({ vendor_id: '', assigned_service: '', agreed_amount: '', contract_notes: '', start_date: '', end_date: '' }); setShowAssignVendorModal(true); }} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"><Plus size={16} /> Assign Vendor</button>
+                        </div>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                                <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                                    <tr>
+                                        <th className="px-6 py-4 w-12 text-center">#</th>
+                                        <th className="px-6 py-4">Vendor</th>
+                                        <th className="px-6 py-4">Service</th>
+                                        <th className="px-6 py-4 text-right">Agreed</th>
+                                        <th className="px-6 py-4 text-right">Paid</th>
+                                        <th className="px-6 py-4 text-right">Balance</th>
+                                        <th className="px-6 py-4 text-center">Status</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                    {isTabLoading ? (<tr><td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500">Loading...</td></tr>) : displayedVendors.length === 0 ? (<tr><td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500">{vendorSearch ? 'No vendors found matching your search.' : 'No vendors assigned yet.'}</td></tr>) : displayedVendors.map((v, index) => (
+                                        <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                            <td className="px-6 py-4 text-center text-slate-400 dark:text-slate-500 font-mono text-xs">{(vendorPage - 1) * itemsPerPage + index + 1}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                                                    <Store size={14} className="text-brand-500" />
+                                                    {v.vendor?.business_name || 'Unknown Vendor'}
+                                                </div>
+                                                <div className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-1"><Phone size={10} /> {v.vendor?.phone || 'N/A'}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-slate-700 dark:text-slate-300">{v.assigned_service || 'N/A'}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-medium text-slate-900 dark:text-white">{formatCurrency(v.agreed_amount)}</td>
+                                            <td className="px-6 py-4 text-right font-medium text-green-600 dark:text-green-400">{formatCurrency(v.amount_paid)}</td>
+                                            <td className="px-6 py-4 text-right font-medium text-orange-600 dark:text-orange-400">{formatCurrency(v.balance_due)}</td>
+                                            <td className="px-6 py-4 text-center">
+                                                {parseFloat(v.balance_due) === 0 ? (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"><CheckCircle size={10} /> Paid</span>
+                                                ) : parseFloat(v.amount_paid) > 0 ? (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300"><Clock size={10} /> Partial</span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"><Clock size={10} /> Pending</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button onClick={() => openEditVendorModal(v)} className="text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 p-1" title="Edit"><Edit size={16} /></button>
+                                                    <button onClick={() => handleDeleteVendor(v.id, v.amount_paid)} className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 p-1" title="Remove"><Trash2 size={16} /></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {filteredVendors.length > itemsPerPage && (<div className="px-6 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between"><span className="text-xs text-slate-500 dark:text-slate-400">Showing {((vendorPage - 1) * itemsPerPage) + 1} to {Math.min(vendorPage * itemsPerPage, filteredVendors.length)} of {filteredVendors.length}</span><div className="flex gap-2"><button onClick={() => setVendorPage(p => Math.max(1, p - 1))} disabled={vendorPage === 1} className="px-3 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded hover:bg-white dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={12} /> Prev</button><button onClick={() => setVendorPage(p => p + 1)} disabled={vendorPage * itemsPerPage >= filteredVendors.length} className="px-3 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded hover:bg-white dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">Next <ChevronRight size={12} /></button></div></div>)}
+                    </div>
+                </div>
+            )}
+
             {/* ================= MODALS ================= */}
 
             {/* BUDGET MODAL */}
@@ -753,6 +981,166 @@ const EventDetailsPage = () => {
 
             {/* PAYMENT MODAL */}
             {showPaymentModal && (<div className="fixed inset-0 bg-slate-900/50 dark:bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-800"><div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center"><h3 className="font-bold text-slate-900 dark:text-white">Record Payment</h3><button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">✕</button></div><form onSubmit={handleRecordPayment} className="p-6 space-y-4"><div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg text-sm mb-2 border border-slate-100 dark:border-slate-700"><p className="text-slate-500 dark:text-slate-400">Contributor</p><p className="font-bold text-slate-900 dark:text-white">{selectedPledge?.contact?.full_name}</p><div className="flex justify-between mt-2"><span className="text-slate-500 dark:text-slate-400">Outstanding:</span><span className="font-bold text-orange-600 dark:text-orange-400">{formatCurrency(selectedPledge?.outstanding_amount)}</span></div></div><div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Amount Received</label><input required type="number" className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:text-white dark:placeholder-slate-500" value={paymentForm.amount} onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })} /></div><div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Method</label><select className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:text-white" value={paymentForm.payment_method} onChange={e => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}><option value="MPESA">M-Pesa</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank Transfer</option><option value="AIRTEL_MONEY">Airtel Money</option></select></div><button type="submit" disabled={isSubmitting} className="w-full bg-brand-600 text-white py-2 rounded-lg font-bold hover:bg-brand-700 disabled:opacity-50">Confirm Payment</button></form></div></div>)}
+
+            {/* ASSIGN VENDOR MODAL */}
+            {showAssignVendorModal && (
+                <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-800">
+                        <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-900 dark:text-white">Assign Vendor to Event</h3>
+                            <button onClick={() => setShowAssignVendorModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">✕</button>
+                        </div>
+                        <form onSubmit={handleAssignVendor} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Select Vendor</label>
+                                <select 
+                                    required
+                                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white"
+                                    value={assignVendorForm.vendor_id}
+                                    onChange={e => setAssignVendorForm({...assignVendorForm, vendor_id: e.target.value})}
+                                >
+                                    <option value="">Choose a vendor...</option>
+                                    {vendorCatalog.map(vendor => (
+                                        <option key={vendor.id} value={vendor.id}>{vendor.business_name} - {vendor.full_name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Assigned Service</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    placeholder="e.g. Photography, Catering Services"
+                                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                                    value={assignVendorForm.assigned_service}
+                                    onChange={e => setAssignVendorForm({...assignVendorForm, assigned_service: e.target.value})}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Agreed Amount (TZS)</label>
+                                <input 
+                                    type="number" 
+                                    required
+                                    placeholder="0.00"
+                                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                                    value={assignVendorForm.agreed_amount}
+                                    onChange={e => setAssignVendorForm({...assignVendorForm, agreed_amount: e.target.value})}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Start Date</label>
+                                    <input 
+                                        type="date"
+                                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white"
+                                        value={assignVendorForm.start_date}
+                                        onChange={e => setAssignVendorForm({...assignVendorForm, start_date: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">End Date</label>
+                                    <input 
+                                        type="date"
+                                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white"
+                                        value={assignVendorForm.end_date}
+                                        onChange={e => setAssignVendorForm({...assignVendorForm, end_date: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contract Notes</label>
+                                <textarea 
+                                    rows="3"
+                                    placeholder="Special requirements, contract details..."
+                                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                                    value={assignVendorForm.contract_notes}
+                                    onChange={e => setAssignVendorForm({...assignVendorForm, contract_notes: e.target.value})}
+                                />
+                            </div>
+                            <div className="pt-4">
+                                <button type="submit" disabled={isSubmitting} className="w-full bg-brand-600 text-white py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors disabled:opacity-50">
+                                    {isSubmitting ? 'Assigning...' : 'Assign Vendor'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* EDIT VENDOR ASSIGNMENT MODAL */}
+            {showEditVendorModal && (
+                <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-800">
+                        <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-900 dark:text-white">Edit Vendor Assignment</h3>
+                            <button onClick={() => setShowEditVendorModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">✕</button>
+                        </div>
+                        <form onSubmit={handleUpdateVendor} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                            <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700">
+                                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Vendor</p>
+                                <p className="font-medium text-slate-900 dark:text-white">{editingVendorAssignment?.vendor?.business_name}</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Assigned Service</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    placeholder="e.g. Photography, Catering Services"
+                                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                                    value={assignVendorForm.assigned_service}
+                                    onChange={e => setAssignVendorForm({...assignVendorForm, assigned_service: e.target.value})}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Agreed Amount (TZS)</label>
+                                <input 
+                                    type="number" 
+                                    required
+                                    placeholder="0.00"
+                                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                                    value={assignVendorForm.agreed_amount}
+                                    onChange={e => setAssignVendorForm({...assignVendorForm, agreed_amount: e.target.value})}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Start Date</label>
+                                    <input 
+                                        type="date"
+                                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white"
+                                        value={assignVendorForm.start_date}
+                                        onChange={e => setAssignVendorForm({...assignVendorForm, start_date: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">End Date</label>
+                                    <input 
+                                        type="date"
+                                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white"
+                                        value={assignVendorForm.end_date}
+                                        onChange={e => setAssignVendorForm({...assignVendorForm, end_date: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contract Notes</label>
+                                <textarea 
+                                    rows="3"
+                                    placeholder="Special requirements, contract details..."
+                                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                                    value={assignVendorForm.contract_notes}
+                                    onChange={e => setAssignVendorForm({...assignVendorForm, contract_notes: e.target.value})}
+                                />
+                            </div>
+                            <div className="pt-4">
+                                <button type="submit" disabled={isSubmitting} className="w-full bg-brand-600 text-white py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors disabled:opacity-50">
+                                    {isSubmitting ? 'Updating...' : 'Update Assignment'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
