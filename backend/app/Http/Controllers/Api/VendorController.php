@@ -180,8 +180,8 @@ class VendorController extends Controller
             ];
         })->values();
 
-        $totalPaid = $confirmedEvents->sum('amount_paid');
-        $totalPending = $confirmedEvents->sum('balance_due');
+        // Get Wallet Data
+        $wallet = \App\Models\VendorWallet::where('vendor_id', $vendor->id)->first();
 
         return response()->json([
             'success' => true,
@@ -201,9 +201,10 @@ class VendorController extends Controller
                 'documents' => $vendor->documents,
                 'events' => $confirmedEvents,
                 'inquiries' => $inquiries,
-                'financials' => [
-                    'total_earnings' => $totalPaid,
-                    'pending_balance' => $totalPending,
+                'wallet' => [
+                    'available_balance' => $wallet ? $wallet->available_balance : 0,
+                    'pending_balance' => $wallet ? $wallet->pending_balance : 0,
+                    'total_earnings' => $wallet ? $wallet->total_earnings : 0,
                 ],
             ],
         ]);

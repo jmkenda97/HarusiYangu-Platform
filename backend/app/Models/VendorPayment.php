@@ -29,11 +29,16 @@ class VendorPayment extends Model
         'payment_date',
         'notes',
         'recorded_by',
+        'is_released',
+        'milestone',
+        'milestone_percentage',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'payment_date' => 'datetime',
+        'is_released' => 'boolean',
+        'milestone_percentage' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

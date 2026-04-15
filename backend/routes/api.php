@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/events/{eventId}/inquiry', [\App\Http\Controllers\Api\EventBookingController::class, 'sendInquiry']);
         Route::put('/bookings/{bookingId}/quote', [\App\Http\Controllers\Api\EventBookingController::class, 'sendQuote']);
         Route::put('/bookings/{bookingId}/accept', [\App\Http\Controllers\Api\EventBookingController::class, 'acceptQuote']);
+        Route::put('/bookings/{bookingId}/confirm-service', [\App\Http\Controllers\Api\EventBookingController::class, 'confirmServiceReceived']);
 
         // Financials & Milestone Payments (Task #5)
         Route::get('/bookings/{bookingId}/payments', [\App\Http\Controllers\Api\VendorPaymentController::class, 'getPaymentInfo']);

@@ -21,21 +21,24 @@ class VendorPaymentController extends Controller
     {
         $booking = EventVendor::with(['event', 'event.wallet', 'vendor'])->findOrFail($bookingId);
         $payments = VendorPayment::where('event_vendor_id', $bookingId)->orderBy('created_at', 'desc')->get();
-        
-        // Suggest next milestone
+
         $nextMilestone = 'DEPOSIT';
         $suggestedPercentage = 20;
-        
+
         if ($payments->count() > 0) {
             $hasDeposit = $payments->where('milestone', 'DEPOSIT')->count() > 0;
             $hasInterim = $payments->where('milestone', 'INTERIM')->count() > 0;
-            
+
             if ($hasDeposit && !$hasInterim) {
                 $nextMilestone = 'INTERIM';
                 $suggestedPercentage = 50;
             } elseif ($hasDeposit && $hasInterim) {
                 $nextMilestone = 'FINAL';
                 $suggestedPercentage = 30;
+            } else {
+                // If it's a custom payment or something else, default to 0
+                $nextMilestone = 'CUSTOM';
+                $suggestedPercentage = 0;
             }
         }
 
@@ -84,6 +87,10 @@ class VendorPaymentController extends Controller
 
         DB::beginTransaction();
         try {
+            // Following GEMINI.md: DEPOSIT/INTERIM are released to lock date/work.
+            // FINAL is held until Host confirms service delivery.
+            $isReleased = in_array($request->milestone, ['DEPOSIT', 'INTERIM']);
+
             // 1. Create Payment Record
             $payment = VendorPayment::create([
                 'id' => (string) Str::uuid(),
@@ -97,7 +104,8 @@ class VendorPaymentController extends Controller
                 'transaction_reference' => $request->transaction_reference,
                 'payment_date' => now(),
                 'notes' => $request->notes,
-                'recorded_by' => auth()->id()
+                'recorded_by' => auth()->id(),
+                'is_released' => $isReleased
             ]);
 
             // 2. Update Event Wallet (Deduct)
@@ -110,8 +118,7 @@ class VendorPaymentController extends Controller
                 ['id' => (string) Str::uuid()]
             );
             
-            // If it's final, it goes to available, otherwise pending
-            if ($request->milestone === 'FINAL') {
+            if ($isReleased) {
                 $vendorWallet->increment('available_balance', $request->amount);
             } else {
                 $vendorWallet->increment('pending_balance', $request->amount);
