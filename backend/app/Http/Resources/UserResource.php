@@ -29,6 +29,20 @@ class UserResource extends JsonResource
             'roles' => $this->roles->pluck('name'),
             'permissions' => $this->getAllPermissions()->pluck('name'),
             // ------------------------
+            
+            'committee_memberships' => $this->committeeMemberships->map(function($membership) {
+                return [
+                    'event_id' => $membership->event_id,
+                    'committee_role' => $membership->committee_role,
+                    'permissions' => [
+                        'can_manage_budget' => (bool)$membership->can_manage_budget,
+                        'can_manage_contributions' => (bool)$membership->can_manage_contributions,
+                        'can_send_messages' => (bool)$membership->can_send_messages,
+                        'can_manage_vendors' => (bool)$membership->can_manage_vendors,
+                        'can_scan_cards' => (bool)$membership->can_scan_cards,
+                    ]
+                ];
+            }),
         ];
     }
 }
