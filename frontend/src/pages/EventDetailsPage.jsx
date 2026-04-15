@@ -128,58 +128,6 @@ const EventDetailsPage = () => {
         }
     };
 
-    // --- PAYMENT MODAL LOGIC ---
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
-    const [selectedBookingForPayment, setSelectedBookingForPayment] = useState(null);
-    const [paymentInfo, setPaymentInfo] = useState(null);
-    const [loadingPaymentInfo, setLoadingPaymentInfo] = useState(false);
-    const [paymentForm, setPaymentForm] = useState({
-        amount: '',
-        milestone: 'DEPOSIT',
-        payment_method: 'CASH',
-        transaction_reference: '',
-        notes: ''
-    });
-
-    const openPaymentModal = async (booking) => {
-        setSelectedBookingForPayment(booking);
-        setShowPaymentModal(true);
-        setLoadingPaymentInfo(true);
-        try {
-            const res = await api.get(`/bookings/${booking.id}/payments`);
-            const data = res.data.data;
-            setPaymentInfo(data);
-            setPaymentForm({
-                amount: data.next_suggested.amount,
-                milestone: data.next_suggested.milestone,
-                payment_method: 'CASH',
-                transaction_reference: '',
-                notes: ''
-            });
-        } catch (err) {
-            alert("Failed to load payment info");
-        } finally {
-            setLoadingPaymentInfo(false);
-        }
-    };
-
-    const handleRecordPayment = async (e) => {
-        e.preventDefault();
-        if (!confirm(`Confirm payment of ${formatCurrency(paymentForm.amount)}?`)) return;
-        setIsSubmitting(true);
-        try {
-            await api.post(`/bookings/${selectedBookingForPayment.id}/payments`, paymentForm);
-            alert("Payment recorded successfully!");
-            setShowPaymentModal(false);
-            fetchVendors();
-            fetchEventDetails();
-        } catch (err) {
-            alert(err.response?.data?.message || "Payment failed");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
     // --- REUSABLE PAGINATION & SEARCH LOGIC ---
     const getPaginatedData = (data, searchFields) => {
         const filtered = data.filter(item => 
@@ -320,17 +268,55 @@ const EventDetailsPage = () => {
                                                 <td className="px-6 py-4 text-right font-bold">{formatCurrency(v.agreed_amount)}</td>
                                                 <td className="px-6 py-4 text-right text-emerald-600 font-bold">{formatCurrency(v.amount_paid)}</td>
                                                 <td className="px-6 py-4 text-right text-orange-600 font-bold">{formatCurrency(v.balance_due)}</td>
+                                                <td className="px-6 py-4 text-right"><button className="p-2 text-slate-400 hover:text-brand-600"><Edit size={16} /></button></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* Inquiries */}
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
+                                <h3 className="font-bold text-slate-900 dark:text-white">Negotiations & Quotes</h3>
+                                <span className="text-[10px] font-bold uppercase bg-blue-100 text-blue-700 px-2 py-1 rounded">In Progress</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-50 dark:bg-slate-800 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                                        <tr>
+                                            <th className="px-6 py-4 w-12 text-center">#</th>
+                                            <th className="px-6 py-4">Vendor</th>
+                                            <th className="px-6 py-4">Status</th>
+                                            <th className="px-6 py-4 text-right">Last Quote</th>
+                                            <th className="px-6 py-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                        {vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).length === 0 ? (
+                                            <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No pending inquiries.</td></tr>
+                                        ) : vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).map((v, idx) => (
+                                            <tr key={v.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-6 py-4 text-center font-mono text-xs text-slate-400">{idx + 1}</td>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-bold text-slate-900 dark:text-white">{v.vendor?.business_name}</div>
+                                                    <div className="text-xs text-slate-500">{v.assigned_service}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${v.status === 'QUOTED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
+                                                        {v.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right font-bold">
+                                                    {v.last_quote_amount ? formatCurrency(v.last_quote_amount) : '---'}
+                                                </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        {parseFloat(v.balance_due) > 0 && (
-                                                            <button 
-                                                                onClick={() => openPaymentModal(v)}
-                                                                className="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm transition-all"
-                                                            >
-                                                                Pay Milestone
-                                                            </button>
+                                                        {v.status === 'QUOTED' && (
+                                                            <button onClick={() => handleAcceptQuote(v.id)} className="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-brand-700 transition-all shadow-sm">Accept Quote</button>
                                                         )}
-                                                        <button className="p-2 text-slate-400 hover:text-brand-600"><Edit size={16} /></button>
+                                                        <button onClick={() => handleDeleteVendor(v.id, 0)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 size={16} /></button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -339,118 +325,40 @@ const EventDetailsPage = () => {
                                 </table>
                             </div>
                         </div>
-
-                        {/* ... (inquiries table) ... */}
                     </div>
                 )}
 
-                {/* ... (rest of tabs) ... */}
-            </div>
-
-            {/* MILESTONE PAYMENT MODAL */}
-            {showPaymentModal && (
-                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in duration-200">
-                        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
-                            <div>
-                                <h3 className="font-bold text-slate-900 dark:text-white">Record Vendor Payment</h3>
-                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Milestone Verification</p>
-                            </div>
-                            <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
-                        </div>
-
-                        {loadingPaymentInfo ? (
-                            <div className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-brand-600 mb-2" /> <p className="text-sm text-slate-500 font-medium">Fetching ledger info...</p></div>
-                        ) : (
-                            <form onSubmit={handleRecordPayment} className="p-6 space-y-5">
-                                {/* Wallet Info */}
-                                <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 p-4 rounded-xl flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-emerald-600"><Wallet size={20} /></div>
-                                        <div>
-                                            <p className="text-[10px] font-bold text-emerald-700/60 dark:text-emerald-400/60 uppercase">Available in Wallet</p>
-                                            <p className="text-lg font-black text-emerald-700 dark:text-emerald-400">{formatCurrency(paymentInfo?.event_wallet_balance)}</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Suggested</p>
-                                        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{paymentInfo?.next_suggested.milestone}</p>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Milestone Stage</label>
-                                        <select 
-                                            required
-                                            className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-brand-500 outline-none"
-                                            value={paymentForm.milestone}
-                                            onChange={e => setPaymentForm({...paymentForm, milestone: e.target.value})}
-                                        >
-                                            <option value="DEPOSIT">Deposit (20%)</option>
-                                            <option value="INTERIM">Interim (50%)</option>
-                                            <option value="FINAL">Final (30%)</option>
-                                            <option value="CUSTOM">Custom Amount</option>
-                                        </select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Amount (TZS)</label>
-                                        <input 
-                                            type="number" 
-                                            required
-                                            className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
-                                            value={paymentForm.amount}
-                                            onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Payment Method</label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {['CASH', 'BANK', 'MOBILE_MONEY'].map(m => (
-                                            <button 
-                                                key={m}
-                                                type="button"
-                                                onClick={() => setPaymentForm({...paymentForm, payment_method: m})}
-                                                className={`py-2 rounded-lg text-[10px] font-black border transition-all ${paymentForm.payment_method === m ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
-                                            >
-                                                {m.replace('_', ' ')}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Transaction Reference (Optional)</label>
-                                    <input 
-                                        type="text"
-                                        placeholder="Receipt # or M-Pesa ID"
-                                        className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                                        value={paymentForm.transaction_reference}
-                                        onChange={e => setPaymentForm({...paymentForm, transaction_reference: e.target.value})}
-                                    />
-                                </div>
-
-                                <button 
-                                    type="submit"
-                                    disabled={isSubmitting || paymentForm.amount > (paymentInfo?.event_wallet_balance || 0)}
-                                    className="w-full bg-brand-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-brand-500/30 hover:bg-brand-700 transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
-                                >
-                                    {isSubmitting ? <><Loader2 size={18} className="animate-spin" /> Recording...</> : 'Confirm Payment Release'}
-                                </button>
-                                
-                                {paymentForm.amount > (paymentInfo?.event_wallet_balance || 0) && (
-                                    <p className="text-[10px] text-red-600 font-bold text-center animate-pulse">Insufficient funds in Event Wallet!</p>
-                                )}
-                            </form>
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
+                {/* --- GUESTS TAB --- */}
+                {activeTab === 'guests' && (
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-slate-50 dark:bg-slate-800 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                                    <tr>
+                                        <th className="px-6 py-4 w-12 text-center">#</th>
+                                        <th className="px-6 py-4">Guest Name</th>
+                                        <th className="px-6 py-4">Contact</th>
+                                        <th className="px-6 py-4">Category</th>
+                                        <th className="px-6 py-4 text-center">RSVP</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                    {getPaginatedData(guests, ['full_name', 'phone', 'category']).items.length === 0 ? (
+                                        <tr><td colSpan="6" className="px-6 py-12 text-center text-slate-400 italic">No guests found.</td></tr>
+                                    ) : getPaginatedData(guests, ['full_name', 'phone', 'category']).items.map((g, idx) => (
+                                        <tr key={g.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <td className="px-6 py-4 text-center font-mono text-xs text-slate-400">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">{g.full_name}</td>
+                                            <td className="px-6 py-4 text-slate-500">{g.phone || 'N/A'}</td>
+                                            <td className="px-6 py-4 text-slate-500 font-medium uppercase text-[10px]">{g.category}</td>
+                                            <td className="px-6 py-4 text-center">
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${g.rsvp_status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-700' : g.rsvp_status === 'DECLINED' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                    {g.rsvp_status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button className="p-2 text-slate-400 hover:text-brand-600"><Edit size={16} /></button>
                                             </td>
                                         </tr>
                                     ))}

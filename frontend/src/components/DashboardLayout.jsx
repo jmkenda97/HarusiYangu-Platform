@@ -92,20 +92,18 @@ const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggl
 
                 {/* STANDARD NAVIGATION (Non-Vendor) */}
                 {user?.role !== 'VENDOR' && menuItems.map((item) => {
-                    // SUPER_ADMIN: Can see Users and Vendors (Admin)
-                    if (user?.role === 'SUPER_ADMIN') {
-                        if (!['Dashboard', 'Users', 'Vendors'].includes(item.name)) return null;
-                    }
+                    if (item.name === 'Users' && user?.role !== 'SUPER_ADMIN') return null;
                     
-                    // HOST: Can see everything except 'Users' and 'Vendors' (Admin view)
-                    if (user?.role === 'HOST') {
-                        if (['Users', 'Vendors'].includes(item.name)) return null;
-                    }
+                    // --- ADDED THIS LINE TO HIDE "MY EVENTS" FOR SUPER ADMIN ---
+                    if (item.name === 'My Events' && user?.role === 'SUPER_ADMIN') return null;
 
-                    // COMMITTEE_MEMBER / GATE_OFFICER: Only Dashboard and My Events
-                    if (['COMMITTEE_MEMBER', 'GATE_OFFICER'].includes(user?.role)) {
-                        if (!['Dashboard', 'My Events'].includes(item.name)) return null;
-                    }
+                    if (item.name === 'My Profile' && user?.role !== 'HOST') return null;
+
+                    // --- VENDORS: Only for SUPER_ADMIN and ADMIN ---
+                    if (item.name === 'Vendors' && user?.role !== 'SUPER_ADMIN' && user?.role !== 'ADMIN') return null;
+
+                    // --- HOST: Vendor Catalog - Only for HOST ---
+                    if (item.name === 'Vendor Catalog' && user?.role !== 'HOST') return null;
 
                     const Icon = item.icon;
                     const isActive = location.pathname === item.path;
