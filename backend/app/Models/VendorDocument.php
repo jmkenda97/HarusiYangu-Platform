@@ -23,6 +23,7 @@ class VendorDocument extends Model
     protected $fillable = [
         'id',
         'vendor_id',
+        'service_id',
         'document_type',
         'document_name',
         'file_url',
@@ -46,6 +47,11 @@ class VendorDocument extends Model
     public function vendor(): BelongsTo
     {
         return $this->belongsTo(Vendor::class, 'vendor_id');
+    }
+
+    public function service(): BelongsTo
+    {
+        return $this->belongsTo(VendorService::class, 'service_id');
     }
 
     public function reviewer(): BelongsTo

@@ -141,24 +141,19 @@ class VendorController extends Controller
         $vendor = Vendor::with(['services', 'documents'])
             ->where('user_id', $user->id)
             ->first();
-    
+
         if (!$vendor) {
             return response()->json([
                 'success' => false,
                 'message' => 'No vendor profile found. Please complete your vendor profile first.'
             ], 404);
         }
-    
-        $assignedEvents = EventVendor::with('event')
+
+        $assignedEvents = EventVendor::with(['event', 'event.owner'])
             ->where('vendor_id', $vendor->id)
             ->get();
-    
-        $totalAgreed = $assignedEvents->sum('agreed_amount');
-        $totalPaid = $assignedEvents->sum('amount_paid');
-        $totalPending = $assignedEvents->sum('balance_due');
-    
-        // Flatten event data for frontend consumption
-        $events = $assignedEvents->map(function ($ev) {
+
+        $confirmedEvents = $assignedEvents->where('status', 'ACCEPTED')->map(function ($ev) {
             return [
                 'id' => $ev->id,
                 'event_name' => $ev->event?->event_name,
@@ -168,8 +163,26 @@ class VendorController extends Controller
                 'amount_paid' => $ev->amount_paid,
                 'balance_due' => $ev->balance_due,
             ];
-        });
-    
+        })->values();
+
+        $inquiries = $assignedEvents->whereIn('status', ['INQUIRY', 'QUOTED'])->map(function ($ev) {
+            return [
+                'id' => $ev->id,
+                'event_id' => $ev->event_id,
+                'event_name' => $ev->event?->event_name,
+                'event_date' => $ev->event?->event_date,
+                'host_name' => $ev->event?->owner?->first_name . ' ' . $ev->event?->owner?->last_name,
+                'host_phone' => $ev->event?->owner?->phone,
+                'assigned_service' => $ev->assigned_service,
+                'status' => $ev->status,
+                'last_quote_amount' => $ev->last_quote_amount,
+                'contract_notes' => $ev->contract_notes,
+            ];
+        })->values();
+
+        $totalPaid = $confirmedEvents->sum('amount_paid');
+        $totalPending = $confirmedEvents->sum('balance_due');
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -186,11 +199,11 @@ class VendorController extends Controller
                 ],
                 'services' => $vendor->services,
                 'documents' => $vendor->documents,
-                'events' => $events,
+                'events' => $confirmedEvents,
+                'inquiries' => $inquiries,
                 'financials' => [
                     'total_earnings' => $totalPaid,
                     'pending_balance' => $totalPending,
-                    'total_agreed' => $totalAgreed,
                 ],
             ],
         ]);

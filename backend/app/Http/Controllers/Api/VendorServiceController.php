@@ -56,7 +56,7 @@ class VendorServiceController extends Controller
 
         try {
             $service = DB::transaction(function () use ($request, $vendor) {
-                return VendorService::create([
+                $service = VendorService::create([
                     'id' => Str::uuid(),
                     'vendor_id' => $vendor->id,
                     'service_name' => $request->service_name,
@@ -65,13 +65,27 @@ class VendorServiceController extends Controller
                     'min_price' => $request->min_price,
                     'max_price' => $request->max_price,
                     'price_unit' => $request->price_unit,
-                    'is_available' => true,
+                    'is_available' => false, // INACTIVE until admin verifies
+                    'is_verified' => false, // NOT VERIFIED yet
                 ]);
+
+                // UPLOAD DOCUMENTS FOR THIS SPECIFIC SERVICE
+                if ($request->hasFile('business_license')) {
+                    $this->createServiceDocument($vendor->id, $service->id, 'BUSINESS_LICENSE', $request->file('business_license'));
+                }
+                if ($request->hasFile('brela_certificate')) {
+                    $this->createServiceDocument($vendor->id, $service->id, 'BRELA_CERTIFICATE', $request->file('brela_certificate'));
+                }
+                if ($request->hasFile('tin_certificate')) {
+                    $this->createServiceDocument($vendor->id, $service->id, 'TIN_CERTIFICATE', $request->file('tin_certificate'));
+                }
+
+                return $service;
             });
 
             return response()->json([
                 'success' => true,
-                'message' => 'Service created successfully',
+                'message' => 'Service created successfully. Please wait for admin verification.',
                 'data' => $service
             ], 201);
         } catch (\Exception $e) {
@@ -83,8 +97,30 @@ class VendorServiceController extends Controller
         }
     }
 
+    private function createServiceDocument($vendorId, $serviceId, $type, $file)
+    {
+        try {
+            $path = $file->store('vendor-documents', 'public');
+            \App\Models\VendorDocument::create([
+                'id' => (string) \Str::uuid(),
+                'vendor_id' => $vendorId,
+                'service_id' => $serviceId,
+                'document_type' => $type,
+                'document_name' => str_replace('_', ' ', $type) . ' - ' . $file->getClientOriginalName(),
+                'file_url' => $path,
+                'mime_type' => $file->getClientMimeType(),
+                'file_size' => $file->getSize(),
+                'verification_status' => 'PENDING',
+                'uploaded_at' => now(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to save service document: ' . $e->getMessage());
+        }
+    }
+
     /**
-     * Update an existing service.
+     * Update an existing service - ALLOWED ONLY FOR UNVERIFIED SERVICES
+     * Vendors can edit services that are not yet verified by admin
      */
     public function update(StoreVendorServiceRequest $request, $id)
     {
@@ -108,13 +144,22 @@ class VendorServiceController extends Controller
             ], 404);
         }
 
+        // BLOCK editing if service is already verified
+        if ($service->is_verified) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Verified services cannot be edited. Contact admin support if changes are needed.'
+            ], 403);
+        }
+
         // Authorize via policy
         $this->authorize('manageServices', $vendor);
 
         try {
+            // PREVENT editing service_type - it's locked after creation
             $service->update([
                 'service_name' => $request->service_name,
-                'service_type' => $request->service_type,
+                // 'service_type' => $request->service_type, // LOCKED - cannot be changed
                 'description' => $request->description,
                 'min_price' => $request->min_price,
                 'max_price' => $request->max_price,
@@ -123,7 +168,7 @@ class VendorServiceController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Service updated successfully',
+                'message' => 'Service updated successfully. It will be reviewed by admin.',
                 'data' => $service
             ]);
         } catch (\Exception $e) {
@@ -136,7 +181,8 @@ class VendorServiceController extends Controller
     }
 
     /**
-     * Delete a service.
+     * Delete a service - ALLOWED ONLY FOR UNVERIFIED SERVICES
+     * Vendors can delete services that are not yet verified
      */
     public function destroy(Request $request, $id)
     {
@@ -160,6 +206,14 @@ class VendorServiceController extends Controller
             ], 404);
         }
 
+        // BLOCK deletion if service is already verified
+        if ($service->is_verified) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Verified services cannot be deleted. Contact admin support if removal is needed.'
+            ], 403);
+        }
+
         // Authorize via policy
         $this->authorize('manageServices', $vendor);
 
@@ -175,6 +229,56 @@ class VendorServiceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete service: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ADMIN: Approve or reject a vendor service
+     */
+    public function adminReview(Request $request, $id)
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Admin access required.'
+            ], 403);
+        }
+
+        $request->validate([
+            'status' => 'required|in:approved,rejected',
+        ]);
+
+        try {
+            $service = VendorService::findOrFail($id);
+
+            if ($request->status === 'approved') {
+                $service->update([
+                    'is_verified' => true,
+                    'is_available' => true,
+                    'verified_at' => now(),
+                ]);
+                $message = 'Service approved and is now active.';
+            } else {
+                $service->update([
+                    'is_verified' => false,
+                    'is_available' => false,
+                    'verified_at' => null,
+                ]);
+                $message = 'Service rejected and deactivated.';
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'data' => $service
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Service Review Failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to review service.'
             ], 500);
         }
     }

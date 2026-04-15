@@ -27,12 +27,17 @@ class VendorService extends Model
         'max_price',
         'price_unit',
         'is_available',
+        'is_verified',
+        'verified_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
         'min_price' => 'decimal:2',
         'max_price' => 'decimal:2',
         'is_available' => 'boolean',
+        'is_verified' => 'boolean',
+        'verified_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -42,5 +47,10 @@ class VendorService extends Model
     public function vendor(): BelongsTo
     {
         return $this->belongsTo(Vendor::class, 'vendor_id');
+    }
+
+    public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(VendorDocument::class, 'service_id');
     }
 }

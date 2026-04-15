@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
-import { Lock, Phone, ArrowRight, RefreshCw, User, Mail, Image, Check, X as CloseIcon, Shield, CreditCard, Users, Menu, ChevronRight, ChevronLeft, Zap, Globe, Clock, Store, Briefcase, Upload, FileText } from 'lucide-react';
+import { Lock, Phone, ArrowRight, RefreshCw, User, Mail, Image, Check, X as CloseIcon, Shield, CreditCard, Users, Menu, ChevronRight, ChevronLeft, Zap, Globe, Clock, Store, Briefcase, Upload, FileText, AlertCircle, DollarSign } from 'lucide-react';
 
 // --- 1. IMAGE CONFIGURATION ---
 const ASSETS = {
@@ -44,18 +44,20 @@ const LandingPage = () => {
         first_name: '', middle_name: '', last_name: '', email: '',
         password: '', password_confirmation: '', profile_photo_url: '',
         // Vendor Specific Fields
-        business_name: '', service_type: 'CATERING', address: ''
+        business_name: '', service_type: 'CATERING', address: '',
+        min_price: '', max_price: ''
     });
 
     // State for File Inputs (Documents)
     const [files, setFiles] = useState({
         business_license: null,
-        business_certificate: null
+        brela_certificate: null,
+        tin_certificate: null
     });
 
     const [imagePreview, setImagePreview] = useState(null);
 
-    const { login } = useAuth();
+    const { login, setUser } = useAuth();
     const navigate = useNavigate();
 
     // --- SLIDER LOGIC ---
@@ -78,7 +80,7 @@ const LandingPage = () => {
             password: '', password_confirmation: '', profile_photo_url: '',
             business_name: '', service_type: 'CATERING', address: ''
         });
-        setFiles({ business_license: null, business_certificate: null });
+        setFiles({ business_license: null, brela_certificate: null, tin_certificate: null });
         setImagePreview(null);
     };
 
@@ -149,8 +151,13 @@ const LandingPage = () => {
                 const result = await login(phone, otp);
                 if (result.success) {
                     handleCloseAuth();
-                    // Navigate will be handled by App.js logic in Step 3
-                    navigate('/');
+                    // Navigate to dashboard immediately (role-based redirect handled by AuthContext)
+                    const storedUser = JSON.parse(localStorage.getItem('harusiyangu_user'));
+                    if (storedUser?.role === 'VENDOR') {
+                        navigate('/vendor/dashboard', { replace: true });
+                    } else {
+                        navigate('/dashboard', { replace: true });
+                    }
                 }
             }
         } catch (err) {
@@ -181,9 +188,20 @@ const LandingPage = () => {
             if (accountType === 'VENDOR') {
                 dataPayload.append('business_name', formData.business_name);
                 dataPayload.append('service_type', formData.service_type);
-                dataPayload.append('address', formData.address);
+                dataPayload.append('address', formData.address || '');
+                
+                const minP = parseFloat(formData.min_price);
+                dataPayload.append('min_price', isNaN(minP) ? 0 : minP);
+                
+                if (formData.max_price) {
+                    const maxP = parseFloat(formData.max_price);
+                    if (!isNaN(maxP)) dataPayload.append('max_price', maxP);
+                }
+                
+                // REQUIRED DOCUMENTS
                 if (files.business_license) dataPayload.append('business_license', files.business_license);
-                if (files.business_certificate) dataPayload.append('business_certificate', files.business_certificate);
+                if (files.brela_certificate) dataPayload.append('brela_certificate', files.brela_certificate);
+                if (files.tin_certificate) dataPayload.append('tin_certificate', files.tin_certificate);
             }
 
             const res = await api.post('/auth/complete-registration', dataPayload, {
@@ -193,15 +211,22 @@ const LandingPage = () => {
             if (res.data.success) {
                 const { token, user } = res.data.data;
 
-                // 1. Save the NEW real token
+                // 1. Save the NEW real token and user data
                 localStorage.setItem('harusiyangu_token', token);
+                localStorage.setItem('harusiyangu_user', JSON.stringify(user));
 
-                // 2. Clear the modal
+                // 2. Update auth context immediately (NO PAGE RELOAD)
+                setUser(user);
+
+                // 3. Close the modal
                 handleCloseAuth();
 
-                // 3. FORCE RELOAD TO / (Root)
-                // We send user to root, and App.js will decide where to go based on role
-                window.location.href = '/';
+                // 4. Navigate to appropriate dashboard based on role (FAST, no reload)
+                if (user.role === 'VENDOR') {
+                    navigate('/vendor/dashboard', { replace: true });
+                } else {
+                    navigate('/dashboard', { replace: true });
+                }
             }
         } catch (error) {
             console.error(error);
@@ -217,11 +242,11 @@ const LandingPage = () => {
             <nav className="fixed w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-sm">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                        <div className="w-10 h-10 bg-[#1e3a8a] rounded-lg flex items-center justify-center text-white font-serif text-xl font-bold shadow-md">H</div>
+                        {/* <div className="w-10 h-10 bg-[#1e3a8a] rounded-lg flex items-center justify-center text-white font-serif text-xl font-bold shadow-md">H</div>
                         <div className="flex flex-col">
                             <span className="text-xl font-bold tracking-tight text-slate-900 leading-none">HarusiYangu</span>
                             <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Event Platform</span>
-                        </div>
+                        </div> */}
                     </div>
                     <div className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-600">
                         <a href="#features" className="hover:text-blue-900 transition-colors">Features</a>
@@ -396,139 +421,226 @@ const LandingPage = () => {
                             </div>
                             <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-20 transform translate-x-1/2 translate-y-1/2"></div>
                         </div>
-                        <div className="w-full md:w-3/5 p-6 md:p-8 bg-white flex flex-col justify-center relative max-h-[90vh] overflow-y-auto">
+                        <div className="w-full md:w-3/5 p-6 md:p-10 bg-white relative max-h-[90vh] overflow-y-auto">
                             <button onClick={handleCloseAuth} className="md:hidden absolute top-4 right-4 text-slate-400"><CloseIcon size={24} /></button>
-                            <div className="max-w-md mx-auto w-full">
-                                <div className="text-right mb-6">
+                            <div className="max-w-xl mx-auto w-full">
+                                <div className="text-right mb-8">
                                     {authMode === 'login' ?
                                         <span className="text-sm text-slate-500">New to HarusiYangu? <button onClick={() => handleSwitchMode('register')} className="text-blue-900 font-bold hover:underline">Create Account</button></span> :
                                         <span className="text-sm text-slate-500">Already have an account? <button onClick={() => handleSwitchMode('login')} className="text-blue-900 font-bold hover:underline">Log In</button></span>
                                     }
                                 </div>
-                                {message && <div className={`p-3 rounded-lg mb-4 text-xs font-medium flex items-center gap-2 ${message.includes('sent') || message.includes('verified') || message.includes('Welcome') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>{message.includes('suspended') ? <Lock size={14} /> : <Check size={14} />}<span>{message}</span></div>}
+                                {message && <div className={`p-4 rounded-xl mb-6 text-sm font-medium flex items-center gap-3 ${message.includes('sent') || message.includes('verified') || message.includes('Welcome') ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>{message.includes('suspended') ? <Lock size={16} /> : <Check size={16} />}<span>{message}</span></div>}
 
                                 {step === 1 && (
                                     <div className="animate-fade-in-up">
-                                        <h4 className="text-2xl font-bold text-slate-900 mb-2">{authMode === 'login' ? 'Login' : 'Register'}</h4>
-                                        <p className="text-slate-500 text-sm mb-6">Enter your phone number to receive a verification code.</p>
+                                        <h4 className="text-3xl font-bold text-slate-900 mb-2">{authMode === 'login' ? 'Welcome Back' : 'Create Account'}</h4>
+                                        <p className="text-slate-500 text-sm mb-8">Enter your phone number to receive a verification code.</p>
 
                                         {authMode === 'register' && (
-                                            <div className="mb-6">
-                                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">I am a:</label>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <button type="button" onClick={() => setAccountType('HOST')} className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg border text-sm font-medium transition-all ${accountType === 'HOST' ? 'border-blue-900 bg-blue-50 text-blue-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}><User size={18} /> Event Host</button>
-                                                    <button type="button" onClick={() => setAccountType('VENDOR')} className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg border text-sm font-medium transition-all ${accountType === 'VENDOR' ? 'border-blue-900 bg-blue-50 text-blue-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}><Store size={18} /> Service Vendor</button>
+                                            <div className="mb-8 p-1 bg-slate-50 rounded-xl border border-slate-100">
+                                                <div className="grid grid-cols-2 gap-1">
+                                                    <button type="button" onClick={() => setAccountType('HOST')} className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-bold transition-all ${accountType === 'HOST' ? 'bg-white text-blue-900 shadow-sm border border-blue-100' : 'text-slate-500 hover:text-slate-700'}`}><User size={18} /> Event Host</button>
+                                                    <button type="button" onClick={() => setAccountType('VENDOR')} className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-bold transition-all ${accountType === 'VENDOR' ? 'bg-white text-blue-900 shadow-sm border border-blue-100' : 'text-slate-500 hover:text-slate-700'}`}><Store size={18} /> Service Vendor</button>
                                                 </div>
                                             </div>
                                         )}
 
                                         <form onSubmit={handleRequestOtp} className="space-y-6">
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Phone Number</label>
+                                                <label className="block text-sm font-bold text-slate-700 mb-2">Phone Number</label>
                                                 <div className="relative">
                                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400"><Phone size={20} /></div>
-                                                    <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="block w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-transparent transition-all text-base font-medium" placeholder="+255 712 345 678" required />
+                                                    <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="block w-full pl-12 pr-4 py-4 border border-slate-200 rounded-xl bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 transition-all text-base font-medium" placeholder="0712 345 678" required />
                                                 </div>
                                             </div>
-                                            <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">{loading ? <RefreshCw className="animate-spin" size={20} /> : <span>Send Verification Code</span>}{!loading && <ChevronRight size={20} />}</button>
+                                            <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-[#172554] text-white font-bold py-4 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5">{loading ? <RefreshCw className="animate-spin" size={20} /> : <span>Send Verification Code</span>}{!loading && <ChevronRight size={20} />}</button>
                                         </form>
                                     </div>
                                 )}
                                 {step === 2 && (
                                     <div className="animate-fade-in-up">
-                                        <div className="mb-6">
+                                        <div className="mb-8">
                                             <button onClick={() => setStep(1)} className="text-slate-400 hover:text-slate-600 text-sm font-medium flex items-center gap-1 mb-4"><ArrowRight size={16} className="rotate-180" /> Change Number</button>
-                                            <h4 className="text-2xl font-bold text-slate-900">Verify Phone</h4>
-                                            <p className="text-slate-500 text-sm mt-1">We sent a code to {phone}</p>
+                                            <h4 className="text-3xl font-bold text-slate-900">Verify Phone</h4>
+                                            <p className="text-slate-500 text-sm mt-2">We sent a code to <span className="text-slate-900 font-bold">{phone}</span></p>
                                         </div>
-                                        <form onSubmit={handleVerifyOtp} className="space-y-6">
+                                        <form onSubmit={handleVerifyOtp} className="space-y-8">
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">Enter 6-Digit Code</label>
-                                                <div className="relative">
-                                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400"><Lock size={20} /></div>
-                                                    <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} className="block w-full pl-12 pr-4 py-3.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-transparent transition-all text-center font-mono text-2xl tracking-widest" placeholder="000000" maxLength={6} required autoFocus />
-                                                </div>
+                                                <label className="block text-sm font-bold text-slate-700 mb-4 text-center">Enter 6-Digit Code</label>
+                                                <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} className="block w-full py-5 border border-slate-200 rounded-2xl bg-slate-50 text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 transition-all text-center font-mono text-4xl tracking-[1em]" placeholder="000000" maxLength={6} required autoFocus />
                                             </div>
-                                            <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">{loading ? <RefreshCw className="animate-spin" size={20} /> : <span>Verify & {authMode === 'register' ? 'Continue' : 'Login'}</span>}</button>
+                                            <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-[#172554] text-white font-bold py-4 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5">{loading ? <RefreshCw className="animate-spin" size={20} /> : <span>Verify & Continue</span>}</button>
                                         </form>
                                     </div>
                                 )}
                                 {step === 3 && authMode === 'register' && (
-                                    <div className="animate-fade-in-up space-y-4">
-                                        <h4 className="text-2xl font-bold text-slate-900 mb-4">Complete Profile</h4>
-                                        <form onSubmit={handleCompleteProfile} className="space-y-4">
+                                    <div className="animate-fade-in-up space-y-6 pb-6">
+                                        <div className="mb-2">
+                                            <h4 className="text-2xl font-bold text-slate-900">Complete Your Profile</h4>
+                                            <p className="text-slate-500 text-sm mt-1">Provide your details to set up your account.</p>
+                                        </div>
+                                        
+                                        <form onSubmit={handleCompleteProfile} className="space-y-8">
+                                            
+                                            {/* --- SECTION: PERSONAL INFORMATION --- */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-2 text-blue-900 font-bold text-sm border-b border-slate-100 pb-2">
+                                                    <User size={16} /> Personal Information
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">First Name</label>
+                                                        <input type="text" value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 outline-none text-sm bg-slate-50" placeholder="John" required />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Middle Name</label>
+                                                        <input type="text" value={formData.middle_name} onChange={(e) => setFormData({ ...formData, middle_name: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 outline-none text-sm bg-slate-50" placeholder="(Optional)" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Last Name</label>
+                                                        <input type="text" value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 outline-none text-sm bg-slate-50" placeholder="Doe" required />
+                                                    </div>
+                                                </div>
 
-                                            {/* --- PERSONAL INFO (2 Cols) --- */}
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">First Name</label><input type="text" value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" required /></div>
-                                                <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Last Name</label><input type="text" value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" required /></div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email Address</label>
+                                                        <div className="relative">
+                                                            <span className="absolute left-4 top-3.5 text-slate-400"><Mail size={18} /></span>
+                                                            <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 outline-none text-sm bg-slate-50" placeholder="john@example.com" />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Profile Photo</label>
+                                                        <div className="flex items-center gap-4">
+                                                            {imagePreview ? (
+                                                                <div className="relative">
+                                                                    <img src={imagePreview} className="h-11 w-11 rounded-full object-cover border-2 border-blue-100 shadow-sm" />
+                                                                    <button type="button" onClick={removeImage} className="absolute -top-1 -right-1 bg-white rounded-full shadow-md text-slate-400 hover:text-red-500 transition-colors"><CloseIcon size={12} /></button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="h-11 w-11 rounded-full bg-slate-100 flex items-center justify-center border-2 border-dashed border-slate-200 text-slate-400"><Image size={18} /></div>
+                                                            )}
+                                                            <label className="text-xs text-blue-900 font-bold cursor-pointer hover:bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 transition-colors">
+                                                                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} /> 
+                                                                {imagePreview ? 'Change Photo' : 'Upload Photo'}
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Email</label><div className="relative"><span className="absolute left-3 top-2.5 text-slate-400"><Mail size={16} /></span><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" /></div></div>
 
-                                            {/* --- VENDOR SPECIFIC (COMPACT GRID) --- */}
+                                            {/* --- SECTION: VENDOR SPECIFIC DETAILS --- */}
                                             {accountType === 'VENDOR' && (
-                                                <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-100 space-y-3 animate-fade-in">
-                                                    <div className="flex items-center gap-2 text-blue-900 font-bold text-xs mb-1"><Briefcase size={14} /> Business Details</div>
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center gap-2 text-blue-900 font-bold text-sm border-b border-slate-100 pb-2">
+                                                        <Briefcase size={16} /> Business Details
+                                                    </div>
 
-                                                    <div className="grid grid-cols-2 gap-3">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                         <div>
-                                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Business Name</label>
-                                                            <input type="text" value={formData.business_name} onChange={(e) => setFormData({ ...formData, business_name: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white" placeholder="e.g. Royal Catering" required />
+                                                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Business Name</label>
+                                                            <input type="text" value={formData.business_name} onChange={(e) => setFormData({ ...formData, business_name: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 outline-none text-sm bg-white shadow-sm" placeholder="e.g. Royal Catering" required />
                                                         </div>
                                                         <div>
-                                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Service Type</label>
-                                                            <select value={formData.service_type} onChange={(e) => setFormData({ ...formData, service_type: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white" required>
+                                                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Service Type</label>
+                                                            <select value={formData.service_type} onChange={(e) => setFormData({ ...formData, service_type: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 outline-none text-sm bg-white shadow-sm cursor-pointer" required>
                                                                 {VENDOR_SERVICES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                                                             </select>
                                                         </div>
                                                     </div>
+
                                                     <div>
-                                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Address</label>
-                                                        <input type="text" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white" placeholder="City, Street..." />
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Business Address</label>
+                                                        <input type="text" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 outline-none text-sm bg-white shadow-sm" placeholder="City, Street, Building..." />
                                                     </div>
 
-                                                    {/* --- DOCUMENT UPLOADS (SIDE BY SIDE) --- */}
-                                                    <div className="grid grid-cols-2 gap-3 pt-2">
-                                                        <div>
-                                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">License (PDF/Img)</label>
-                                                            <div className="relative">
-                                                                <input type="file" id="license_upload" className="hidden" accept="image/*,.pdf" onChange={(e) => setFiles({ ...files, business_license: e.target.files[0] })} />
-                                                                <label htmlFor="license_upload" className={`flex items-center justify-center gap-2 w-full px-3 py-2 border-2 border-dashed rounded-lg cursor-pointer text-xs transition-colors ${files.business_license ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50 text-slate-500'}`}>
-                                                                    <FileText size={14} /> {files.business_license ? files.business_license.name : 'Upload License'}
-                                                                </label>
+                                                    {/* Price Range Info */}
+                                                    <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100 shadow-inner">
+                                                        <div className="flex items-start gap-3 mb-4">
+                                                            <div className="p-2 bg-blue-100 rounded-lg text-blue-700"><DollarSign size={18} /></div>
+                                                            <div>
+                                                                <h5 className="text-sm font-bold text-blue-900">Service Price Range</h5>
+                                                                <p className="text-xs text-blue-600 mt-1">Give potential clients an idea of your service cost.</p>
                                                             </div>
                                                         </div>
-                                                        <div>
-                                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Certificate (PDF/Img)</label>
-                                                            <div className="relative">
-                                                                <input type="file" id="cert_upload" className="hidden" accept="image/*,.pdf" onChange={(e) => setFiles({ ...files, business_certificate: e.target.files[0] })} />
-                                                                <label htmlFor="cert_upload" className={`flex items-center justify-center gap-2 w-full px-3 py-2 border-2 border-dashed rounded-lg cursor-pointer text-xs transition-colors ${files.business_certificate ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50 text-slate-500'}`}>
-                                                                    <FileText size={14} /> {files.business_certificate ? files.business_certificate.name : 'Upload Cert'}
-                                                                </label>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-blue-700 uppercase mb-1.5 ml-1">Minimum Price (TZS)</label>
+                                                                <input 
+                                                                    type="number" 
+                                                                    value={formData.min_price || ''} 
+                                                                    onChange={(e) => setFormData({ ...formData, min_price: e.target.value })} 
+                                                                    className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white shadow-sm" 
+                                                                    placeholder="000,000" 
+                                                                    min="0"
+                                                                    required 
+                                                                />
                                                             </div>
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-blue-700 uppercase mb-1.5 ml-1">Maximum Price (TZS)</label>
+                                                                <input 
+                                                                    type="number" 
+                                                                    value={formData.max_price || ''} 
+                                                                    onChange={(e) => setFormData({ ...formData, max_price: e.target.value })} 
+                                                                    className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white shadow-sm" 
+                                                                    placeholder="0,000,000" 
+                                                                    min="0"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* --- DOCUMENT UPLOADS --- */}
+                                                    <div className="space-y-4">
+                                                        <div className="flex items-center gap-2 text-red-600 font-bold text-xs">
+                                                            <AlertCircle size={14} /> Required Verification Documents
+                                                        </div>
+                                                        <div className="grid grid-cols-1 gap-3">
+                                                            {[
+                                                                { id: 'business_license', label: 'Business License', icon: '📄', key: 'business_license' },
+                                                                { id: 'brela_certificate', label: 'BRELA Registration Certificate', icon: '🏢', key: 'brela_certificate' },
+                                                                { id: 'tin_certificate', label: 'TIN Certificate', icon: '💰', key: 'tin_certificate' }
+                                                            ].map((doc) => (
+                                                                <div key={doc.id} className="relative">
+                                                                    <input type="file" id={doc.id} className="hidden" accept="image/*,.pdf" onChange={(e) => setFiles({ ...files, [doc.key]: e.target.files[0] })} required />
+                                                                    <label htmlFor={doc.id} className={`flex items-center justify-between w-full p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${files[doc.key] ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-500'}`}>
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="text-xl">{doc.icon}</span>
+                                                                            <div className="text-left">
+                                                                                <div className="text-xs font-bold">{doc.label}</div>
+                                                                                <div className="text-[10px] opacity-70 truncate max-w-[200px]">{files[doc.key] ? files[doc.key].name : 'Click to upload (PDF, JPG, PNG)'}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                        {files[doc.key] ? <Check size={18} className="text-emerald-500" /> : <Upload size={18} className="text-slate-400" />}
+                                                                    </label>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     </div>
                                                 </div>
                                             )}
 
-                                            {/* --- PROFILE PHOTO & PASSWORD (2 COLS) --- */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                                                <div>
-                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Profile Photo</label>
-                                                    <div className="flex items-center gap-3">
-                                                        {imagePreview ? <img src={imagePreview} className="h-10 w-10 rounded-full object-cover border" /> : <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center"><Image size={16} className="text-slate-400" /></div>}
-                                                        <label className="text-xs text-blue-900 font-medium cursor-pointer hover:underline">
-                                                            <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} /> Change Photo
-                                                        </label>
-                                                    </div>
+                                            {/* --- SECTION: SECURITY --- */}
+                                            <div className="space-y-4 pt-2">
+                                                <div className="flex items-center gap-2 text-blue-900 font-bold text-sm border-b border-slate-100 pb-2">
+                                                    <Lock size={16} /> Security
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Password</label><input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" required /></div>
-                                                    <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Confirm</label><input type="password" value={formData.password_confirmation} onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })} className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-900 outline-none text-sm" required /></div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Create Password</label>
+                                                        <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 outline-none text-sm bg-slate-50" placeholder="••••••••" required />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Confirm Password</label>
+                                                        <input type="password" value={formData.password_confirmation} onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })} className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 outline-none text-sm bg-slate-50" placeholder="••••••••" required />
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-lg shadow-md hover:shadow-lg transition-all mt-2 text-sm">{loading ? <RefreshCw className="animate-spin inline mr-2" size={16} /> : <span>Create {accountType === 'VENDOR' ? 'Vendor' : 'Account'}</span>}</button>
+                                            <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-[#172554] text-white font-bold py-4 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all mt-4 flex items-center justify-center gap-2 transform hover:-translate-y-0.5">{loading ? <RefreshCw className="animate-spin" size={20} /> : <span>Create {accountType === 'VENDOR' ? 'Vendor Profile' : 'Account'}</span>}</button>
                                         </form>
                                     </div>
                                 )}

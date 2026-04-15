@@ -38,12 +38,22 @@ Route::prefix('v1')->group(function () {
         Route::get('/users/me', [UserController::class, 'me']);
         Route::put('/users/profile', [UserController::class, 'updateProfile']);
 
+        // Notifications
+        Route::get('/notifications', [AuthController::class, 'getNotifications']);
+        Route::put('/notifications/{id}/read', [AuthController::class, 'markNotificationAsRead']);
+        Route::post('/notifications/read-all', [AuthController::class, 'markAllNotificationsAsRead']);
+
         Route::prefix('users')->group(function () {
             Route::get('/', [UserController::class, 'index']);
             Route::post('/', [UserController::class, 'store']);
             Route::put('/{id}', [UserController::class, 'update']);
             Route::delete('/{id}', [UserController::class, 'destroy']);
         });
+
+        // Event Bookings & Negotiation (Task #4)
+        Route::post('/events/{eventId}/inquiry', [\App\Http\Controllers\Api\EventBookingController::class, 'sendInquiry']);
+        Route::put('/bookings/{bookingId}/quote', [\App\Http\Controllers\Api\EventBookingController::class, 'sendQuote']);
+        Route::put('/bookings/{bookingId}/accept', [\App\Http\Controllers\Api\EventBookingController::class, 'acceptQuote']);
     });
 
     // ==========================================
@@ -113,6 +123,8 @@ Route::prefix('v1')->group(function () {
             Route::put('/{id}/reject', [AdminVendorController::class, 'reject']);
             Route::put('/{id}/block', [AdminVendorController::class, 'block']);
             Route::put('/{id}/unblock', [AdminVendorController::class, 'unblock']);
+            Route::put('/{vendorId}/services/{serviceId}/approve', [AdminVendorController::class, 'approveService']);
+            Route::put('/{vendorId}/services/{serviceId}/reject', [AdminVendorController::class, 'rejectService']);
             Route::put('/{vendorId}/documents/{docId}/review', [AdminVendorController::class, 'reviewDocument']);
         });
 
@@ -131,11 +143,17 @@ Route::prefix('v1')->group(function () {
             Route::post('/services', [VendorServiceController::class, 'store']);
             Route::put('/services/{id}', [VendorServiceController::class, 'update']);
             Route::delete('/services/{id}', [VendorServiceController::class, 'destroy']);
+            Route::put('/services/{id}/review', [VendorServiceController::class, 'adminReview']);
 
             // Vendor Documents
             Route::get('/documents', [VendorDocumentController::class, 'index']);
             Route::post('/documents', [VendorDocumentController::class, 'store']);
+            Route::put('/documents/{id}', [VendorDocumentController::class, 'update']);
             Route::delete('/documents/{id}', [VendorDocumentController::class, 'destroy']);
+            Route::get('/documents/{id}/view', [VendorDocumentController::class, 'serveFile']);
         });
     });
 });
+
+// PUBLIC DOCUMENT VIEW - NO AUTH REQUIRED
+Route::get('/api/v1/vendors/documents/{id}/view', [VendorDocumentController::class, 'serveFile']);

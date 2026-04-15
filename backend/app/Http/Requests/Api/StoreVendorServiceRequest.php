@@ -21,7 +21,7 @@ class StoreVendorServiceRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        $rules = [
             'service_name' => 'required|string|max:255',
             'service_type' => 'required|in:CATERING,DECORATION,MC,PHOTOGRAPHY,VIDEOGRAPHY,SOUND,TRANSPORT,TENT_CHAIRS,CAKE,MAKEUP,SECURITY,VENUE,PRINTING,OTHER',
             'description' => 'nullable|string|max:1000',
@@ -29,6 +29,15 @@ class StoreVendorServiceRequest extends FormRequest
             'max_price' => 'nullable|numeric|gte:min_price',
             'price_unit' => 'nullable|string|in:per_event,per_hour,per_day,per_person,flat_rate',
         ];
+
+        // If creating a new service, require documents
+        if ($this->isMethod('POST')) {
+            $rules['business_license'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:5120';
+            $rules['brela_certificate'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:5120';
+            $rules['tin_certificate'] = 'required|file|mimes:pdf,jpg,jpeg,png|max:5120';
+        }
+
+        return $rules;
     }
 
     /**
@@ -48,6 +57,9 @@ class StoreVendorServiceRequest extends FormRequest
             'max_price.numeric' => 'Maximum price must be a number.',
             'max_price.gte' => 'Maximum price must be greater than or equal to minimum price.',
             'price_unit.in' => 'Invalid price unit selected.',
+            'business_license.required' => 'Business license is required for new services.',
+            'brela_certificate.required' => 'BRELA certificate is required for new services.',
+            'tin_certificate.required' => 'TIN certificate is required for new services.',
         ];
     }
 

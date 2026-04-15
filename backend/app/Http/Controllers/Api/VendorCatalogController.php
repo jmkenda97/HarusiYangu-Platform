@@ -13,11 +13,13 @@ class VendorCatalogController extends Controller
     /**
      * List all ACTIVE (admin-approved) vendors for browsing.
      * Supports filtering by service_type, search, and price range.
+     * ONLY shows services that are BOTH verified AND available.
      */
     public function index(Request $request)
     {
         $query = Vendor::with(['services' => function ($q) {
-            $q->where('is_available', true);
+            $q->where('is_available', true)
+              ->where('is_verified', true); // ONLY verified services
         }])
             ->where('status', 'ACTIVE');
 
@@ -28,7 +30,8 @@ class VendorCatalogController extends Controller
                 $q->where('service_type', $serviceType)
                     ->orWhereHas('services', function (Builder $sq) use ($serviceType) {
                         $sq->where('service_type', $serviceType)
-                            ->where('is_available', true);
+                            ->where('is_available', true)
+                            ->where('is_verified', true); // ONLY verified services
                     });
             });
         }
@@ -47,6 +50,7 @@ class VendorCatalogController extends Controller
             $minPrice = $request->min_price;
             $query->whereHas('services', function (Builder $q) use ($minPrice) {
                 $q->where('is_available', true)
+                    ->where('is_verified', true) // ONLY verified services
                     ->where('min_price', '>=', $minPrice);
             });
         }
@@ -55,6 +59,7 @@ class VendorCatalogController extends Controller
             $maxPrice = $request->max_price;
             $query->whereHas('services', function (Builder $q) use ($maxPrice) {
                 $q->where('is_available', true)
+                    ->where('is_verified', true) // ONLY verified services
                     ->where('max_price', '<=', $maxPrice);
             });
         }
@@ -72,13 +77,14 @@ class VendorCatalogController extends Controller
 
     /**
      * Show a single ACTIVE vendor's full profile.
-     * Includes available services and APPROVED documents only.
+     * Includes ONLY VERIFIED AND AVAILABLE services and APPROVED documents only.
      */
     public function show($id)
     {
         $vendor = Vendor::with([
             'services' => function ($q) {
-                $q->where('is_available', true);
+                $q->where('is_available', true)
+                  ->where('is_verified', true); // ONLY verified & available services
             },
             'documents' => function ($q) {
                 $q->where('verification_status', 'APPROVED');

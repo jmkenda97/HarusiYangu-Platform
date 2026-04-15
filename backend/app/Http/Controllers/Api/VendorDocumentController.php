@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Response;
 
 class VendorDocumentController extends Controller
 {
@@ -29,7 +30,33 @@ class VendorDocumentController extends Controller
 
         $documents = VendorDocument::where('vendor_id', $vendor->id)
             ->orderBy('uploaded_at', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($document) {
+                // Add base64 data URI for immediate browser display (like profile photos)
+                try {
+                    $filePath = $document->file_url;
+                    
+                    // Remove leading /storage/ or storage/ if present
+                    if (strpos($filePath, '/storage/') === 0) {
+                        $filePath = substr($filePath, strlen('/storage/'));
+                    }
+                    if (strpos($filePath, 'storage/') === 0) {
+                        $filePath = substr($filePath, strlen('storage/'));
+                    }
+                    
+                    if (Storage::disk('public')->exists($filePath)) {
+                        $fileContent = Storage::disk('public')->get($filePath);
+                        $base64 = base64_encode($fileContent);
+                        $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;
+                    } else {
+                        $document->file_url_full = null;
+                    }
+                } catch (\Exception $e) {
+                    $document->file_url_full = null;
+                }
+                
+                return $document;
+            });
 
         return response()->json([
             'success' => true,
@@ -46,6 +73,7 @@ class VendorDocumentController extends Controller
             'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'document_type' => 'required|string|in:BUSINESS_LICENSE,TIN_CERTIFICATE,PORTFOLIO,INSURANCE,OTHER',
             'document_name' => 'required|string|max:255',
+            'service_id' => 'nullable|exists:vendor_services,id',
         ], [
             'file.required' => 'A file is required.',
             'file.file' => 'The uploaded item must be a file.',
@@ -55,6 +83,7 @@ class VendorDocumentController extends Controller
             'document_type.in' => 'Invalid document type selected.',
             'document_name.required' => 'Document name is required.',
             'document_name.max' => 'Document name must not exceed 255 characters.',
+            'service_id.exists' => 'The selected service does not exist.',
         ]);
 
         $vendor = Vendor::where('user_id', $request->user()->id)->first();
@@ -77,6 +106,7 @@ class VendorDocumentController extends Controller
                 return VendorDocument::create([
                     'id' => Str::uuid(),
                     'vendor_id' => $vendor->id,
+                    'service_id' => $request->service_id,
                     'document_type' => $request->document_type,
                     'document_name' => $request->document_name,
                     'file_url' => $filePath,
@@ -86,6 +116,15 @@ class VendorDocumentController extends Controller
                     'uploaded_at' => now(),
                 ]);
             });
+
+            // Add base64 data URI to response (like profile photos)
+            try {
+                $fileContent = Storage::disk('public')->get($filePath);
+                $base64 = base64_encode($fileContent);
+                $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;
+            } catch (\Exception $e) {
+                $document->file_url_full = null;
+            }
 
             return response()->json([
                 'success' => true,
@@ -102,7 +141,7 @@ class VendorDocumentController extends Controller
     }
 
     /**
-     * Delete a document.
+     * Delete a document - Only allowed if document is PENDING or REJECTED
      */
     public function destroy(Request $request, $id)
     {
@@ -126,6 +165,14 @@ class VendorDocumentController extends Controller
             ], 404);
         }
 
+        // RESTRICTION: Cannot delete APPROVED documents
+        if ($document->verification_status === 'APPROVED') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete verified documents. Contact admin if you need to update this document.'
+            ], 403);
+        }
+
         // Authorize via policy
         $this->authorize('manageDocuments', $vendor);
 
@@ -147,6 +194,147 @@ class VendorDocumentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete document: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update/Replace a document - For rejected documents or when vendor wants to update
+     */
+    public function update(Request $request, $id)
+    {
+        $vendor = Vendor::where('user_id', $request->user()->id)->first();
+
+        if (!$vendor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No vendor profile found.'
+            ], 404);
+        }
+
+        $document = VendorDocument::where('id', $id)
+            ->where('vendor_id', $vendor->id)
+            ->first();
+
+        if (!$document) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Document not found.'
+            ], 404);
+        }
+
+        // RESTRICTION: Cannot update APPROVED documents
+        if ($document->verification_status === 'APPROVED') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot update verified documents. Contact admin if you need to change this document.'
+            ], 403);
+        }
+
+        $request->validate([
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'document_name' => 'sometimes|string|max:255',
+        ], [
+            'file.required' => 'A file is required.',
+            'file.file' => 'The uploaded item must be a file.',
+            'file.mimes' => 'File must be a PDF, JPG, JPEG, or PNG.',
+            'file.max' => 'File size must not exceed 5MB.',
+        ]);
+
+        // Authorize via policy
+        $this->authorize('manageDocuments', $vendor);
+
+        try {
+            $file = $request->file('file');
+            
+            // Delete old file
+            if ($document->file_url && Storage::disk('public')->exists($document->file_url)) {
+                Storage::disk('public')->delete($document->file_url);
+            }
+
+            // Upload new file
+            $filePath = Storage::disk('public')->putFile('vendor-documents', $file);
+
+            // Update document
+            $document->update([
+                'file_url' => $filePath,
+                'mime_type' => $file->getMimeType(),
+                'file_size' => $file->getSize(),
+                'verification_status' => 'PENDING', // Reset to pending for re-review
+                'document_name' => $request->document_name ?? $document->document_name,
+                'reviewed_by' => null,
+                'reviewed_at' => null,
+                'rejection_reason' => null,
+            ]);
+
+            // Add base64 data URI to response (like profile photos)
+            try {
+                $fileContent = Storage::disk('public')->get($filePath);
+                $base64 = base64_encode($fileContent);
+                $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;
+            } catch (\Exception $e) {
+                $document->file_url_full = null;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Document updated successfully. It will be reviewed again by admin.',
+                'data' => $document
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Vendor Document Update Failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update document: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Serve a file directly for browser display
+     */
+    public function serveFile($documentId)
+    {
+        try {
+            $document = VendorDocument::findOrFail($documentId);
+            
+            // Fix file path - handle multiple path formats
+            $filePath = $document->file_url;
+            
+            // Remove leading /storage/ if present
+            if (strpos($filePath, '/storage/') === 0) {
+                $filePath = substr($filePath, strlen('/storage/'));
+            }
+            
+            // Remove leading storage/ if present
+            if (strpos($filePath, 'storage/') === 0) {
+                $filePath = substr($filePath, strlen('storage/'));
+            }
+            
+            // Check if file exists
+            if (!Storage::disk('public')->exists($filePath)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File not found: ' . $filePath
+                ], 404);
+            }
+
+            // Get file content
+            $fileContent = Storage::disk('public')->get($filePath);
+            $mimeType = $document->mime_type;
+            
+            // Convert to base64 data URI for browser display
+            $base64 = base64_encode($fileContent);
+            $dataUri = 'data:' . $mimeType . ';base64,' . $base64;
+
+            return Response::make($dataUri, 200, [
+                'Content-Type' => 'text/plain',
+                'Cache-Control' => 'public, max-age=31536000',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to serve file: ' . $e->getMessage()
             ], 500);
         }
     }

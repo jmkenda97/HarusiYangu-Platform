@@ -1,11 +1,13 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: 'http://127.0.0.1:8000/api/v1', // Pointing to your Laravel API
+    baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1',
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
-    }
+    },
+    timeout: 30000, // 30 second timeout
+    withCredentials: false // Disable for faster performance (using token auth)
 });
 
 // 1. REQUEST INTERCEPTOR
@@ -32,7 +34,8 @@ api.interceptors.response.use(
             // Token expired or invalid
             localStorage.removeItem('harusiyangu_token');
             localStorage.removeItem('harusiyangu_user');
-            window.location.href = '/login'; // Force redirect to login
+            // Use React router instead of window.location for faster navigation
+            window.location.href = '/login';
         }
         return Promise.reject(error);
     }

@@ -7,13 +7,11 @@ use App\Models\Vendor;
 use App\Models\VendorDocument;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail; // <--- ADDED
+use App\Mail\VendorStatusChange; // <--- ADDED
 
 class AdminVendorController extends Controller
 {
-    /**
-     * List all vendors with eager-loaded relationships.
-     * Supports filtering by status, service_type, and search.
-     */
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -21,44 +19,60 @@ class AdminVendorController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Admin access required.'], 403);
         }
 
-        $query = Vendor::with(['user', 'services', 'documents']);
+        $query = Vendor::with(['user', 'services', 'documents']); // Ensure documents are loaded
 
-        // Filter by status
-        if ($request->has('status') && $request->status) {
-            $query->where('status', $request->status);
-        }
-
-        // Filter by service_type
-        if ($request->has('service_type') && $request->service_type) {
-            $query->where('service_type', $request->service_type);
-        }
-
-        // Search by business_name or full_name
+        if ($request->has('status') && $request->status) $query->where('status', $request->status);
+        if ($request->has('service_type') && $request->service_type) $query->where('service_type', $request->service_type);
         if ($request->has('search') && $request->search) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('business_name', 'like', "%{$search}%")
-                  ->orWhere('full_name', 'like', "%{$search}%");
+                $q->where('business_name', 'like', "%{$search}%")->orWhere('full_name', 'like', "%{$search}%");
             });
         }
 
         $vendors = $query->orderBy('created_at', 'desc')->get();
-
-        // Add counts for each vendor
         $vendors->each(function ($vendor) {
+            // Service statistics
             $vendor->services_count = $vendor->services->count();
+            $vendor->active_services_count = $vendor->services->where('is_verified', true)->where('is_available', true)->count();
+            $vendor->pending_services_count = $vendor->services->where('is_verified', false)->count();
+            $vendor->inactive_services_count = $vendor->services->where('is_available', false)->count();
+
+            // Document statistics
             $vendor->documents_count = $vendor->documents->count();
+            $vendor->pending_documents_count = $vendor->documents->where('verification_status', 'PENDING')->count();
+            $vendor->approved_documents_count = $vendor->documents->where('verification_status', 'APPROVED')->count();
+            $vendor->rejected_documents_count = $vendor->documents->where('verification_status', 'REJECTED')->count();
+
+            // Add base64 data URI to each document for browser display
+            $vendor->documents->each(function ($document) {
+                try {
+                    $filePath = $document->file_url;
+
+                    // Remove leading /storage/ or storage/ if present
+                    if (strpos($filePath, '/storage/') === 0) {
+                        $filePath = substr($filePath, strlen('/storage/'));
+                    }
+                    if (strpos($filePath, 'storage/') === 0) {
+                        $filePath = substr($filePath, strlen('storage/'));
+                    }
+
+                    if (\Storage::disk('public')->exists($filePath)) {
+                        $fileContent = \Storage::disk('public')->get($filePath);
+                        $base64 = base64_encode($fileContent);
+                        $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;
+                    } else {
+                        $document->file_url_full = null;
+                    }
+                } catch (\Exception $e) {
+                    $document->file_url_full = null;
+                }
+            });
         });
 
-        return response()->json([
-            'success' => true,
-            'data' => $vendors
-        ]);
+        return response()->json(['success' => true, 'data' => $vendors]);
     }
 
-    /**
-     * Show a single vendor with all relationships loaded.
-     */
     public function show($id)
     {
         $user = auth()->user();
@@ -66,192 +80,176 @@ class AdminVendorController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Admin access required.'], 403);
         }
 
-        $vendor = Vendor::with([
-            'user',
-            'services',
-            'documents.reviewer',
-            'eventVendors.event'
-        ])->find($id);
+        $vendor = Vendor::with(['user', 'services', 'documents.reviewer', 'eventVendors.event'])->find($id);
+        if (!$vendor) return response()->json(['success' => false, 'message' => 'Vendor not found.'], 404);
 
-        if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vendor not found.'
-            ], 404);
-        }
+        // Add base64 data URI to all documents for browser display
+        $vendor->documents->each(function ($document) {
+            try {
+                $filePath = $document->file_url;
 
-        return response()->json([
-            'success' => true,
-            'data' => $vendor
-        ]);
+                // Remove leading /storage/ or storage/ if present
+                if (strpos($filePath, '/storage/') === 0) {
+                    $filePath = substr($filePath, strlen('/storage/'));
+                }
+                if (strpos($filePath, 'storage/') === 0) {
+                    $filePath = substr($filePath, strlen('storage/'));
+                }
+
+                if (\Storage::disk('public')->exists($filePath)) {
+                    $fileContent = \Storage::disk('public')->get($filePath);
+                    $base64 = base64_encode($fileContent);
+                    $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;
+                } else {
+                    $document->file_url_full = null;
+                }
+            } catch (\Exception $e) {
+                $document->file_url_full = null;
+            }
+        });
+
+        return response()->json(['success' => true, 'data' => $vendor]);
     }
 
-    /**
-     * Approve a vendor (change status to ACTIVE).
-     */
     public function approve($id)
     {
         $user = auth()->user();
         if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized. Admin access required.'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
 
         try {
             $vendor = Vendor::find($id);
-
-            if (!$vendor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Vendor not found.'
-                ], 404);
-            }
-
+            if (!$vendor) return response()->json(['success' => false, 'message' => 'Vendor not found.'], 404);
             if (!in_array($vendor->status, ['PENDING_APPROVAL', 'INACTIVE'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Vendor cannot be approved. Current status: ' . $vendor->status
-                ], 422);
+                return response()->json(['success' => false, 'message' => 'Vendor cannot be approved.'], 422);
             }
 
             $vendor->update(['status' => 'ACTIVE']);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Vendor approved successfully.',
-                'data' => $vendor
-            ]);
+            // SEND APPROVAL EMAIL
+            if ($vendor->user && $vendor->user->email) {
+                Mail::to($vendor->user->email)->send(new VendorStatusChange($vendor, 'ACTIVE'));
+            }
+
+            return response()->json(['success' => true, 'message' => 'Vendor approved successfully.', 'data' => $vendor]);
         } catch (\Exception $e) {
             Log::error('Vendor Approval Failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to approve vendor: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to approve vendor.'], 500);
         }
     }
 
-    /**
-     * Reject a vendor (change status to INACTIVE with reason).
-     */
     public function reject(Request $request, $id)
     {
         $user = auth()->user();
         if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized. Admin access required.'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
 
-        $request->validate([
-            'rejection_reason' => 'required|string|max:500'
-        ]);
+        $request->validate(['rejection_reason' => 'required|string|max:500']);
 
         try {
             $vendor = Vendor::find($id);
+            if (!$vendor) return response()->json(['success' => false, 'message' => 'Vendor not found.'], 404);
 
-            if (!$vendor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Vendor not found.'
-                ], 404);
-            }
-
+            $reason = $request->rejection_reason;
             $vendor->update([
                 'status' => 'INACTIVE',
-                'notes' => ($vendor->notes ? $vendor->notes . "\n" : '') . 'Rejection Reason: ' . $request->rejection_reason
+                'notes' => ($vendor->notes ? $vendor->notes . "\n" : '') . 'Rejection Reason: ' . $reason
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Vendor rejected successfully.',
-                'data' => $vendor
-            ]);
+            // SEND REJECTION EMAIL
+            if ($vendor->user && $vendor->user->email) {
+                Mail::to($vendor->user->email)->send(new VendorStatusChange($vendor, 'INACTIVE', $reason));
+            }
+
+            return response()->json(['success' => true, 'message' => 'Vendor rejected successfully.', 'data' => $vendor]);
         } catch (\Exception $e) {
             Log::error('Vendor Rejection Failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to reject vendor: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to reject vendor.'], 500);
         }
+        
     }
 
-    /**
-     * Block a vendor (change status to BLACKLISTED).
-     */
     public function block($id)
     {
         $user = auth()->user();
-        if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized. Admin access required.'], 403);
-        }
+        if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
 
         try {
             $vendor = Vendor::find($id);
-
-            if (!$vendor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Vendor not found.'
-                ], 404);
-            }
-
+            if (!$vendor) return response()->json(['success' => false, 'message' => 'Vendor not found.'], 404);
             $vendor->update(['status' => 'BLACKLISTED']);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Vendor blocked successfully.',
-                'data' => $vendor
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Vendor Block Failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to block vendor: ' . $e->getMessage()
-            ], 500);
-        }
+            return response()->json(['success' => true, 'message' => 'Vendor blocked successfully.', 'data' => $vendor]);
+        } catch (\Exception $e) { return response()->json(['success' => false, 'message' => 'Failed.'], 500); }
     }
 
-    /**
-     * Unblock a vendor (change status from BLACKLISTED to ACTIVE).
-     */
     public function unblock($id)
     {
         $user = auth()->user();
-        if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized. Admin access required.'], 403);
-        }
+        if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
 
         try {
             $vendor = Vendor::where('status', 'BLACKLISTED')->find($id);
-
-            if (!$vendor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Vendor not found or not blacklisted.'
-                ], 404);
-            }
-
+            if (!$vendor) return response()->json(['success' => false, 'message' => 'Vendor not found.'], 404);
             $vendor->update(['status' => 'ACTIVE']);
+            return response()->json(['success' => true, 'message' => 'Vendor unblocked successfully.', 'data' => $vendor]);
+        } catch (\Exception $e) { return response()->json(['success' => false, 'message' => 'Failed.'], 500); }
+    }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Vendor unblocked successfully.',
-                'data' => $vendor
+    public function approveService($vendorId, $serviceId)
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        try {
+            $service = \App\Models\VendorService::where('vendor_id', $vendorId)->find($serviceId);
+            if (!$service) return response()->json(['success' => false, 'message' => 'Service not found.'], 404);
+
+            $service->update([
+                'is_verified' => true,
+                'is_available' => true,
+                'rejection_reason' => null
             ]);
+
+            return response()->json(['success' => true, 'message' => 'Service approved and activated.', 'data' => $service]);
         } catch (\Exception $e) {
-            Log::error('Vendor Unblock Failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to unblock vendor: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to approve service.'], 500);
         }
     }
 
-    /**
-     * Review a vendor document (approve or reject).
-     */
+    public function rejectService(Request $request, $vendorId, $serviceId)
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $request->validate(['rejection_reason' => 'required|string|max:500']);
+
+        try {
+            $service = \App\Models\VendorService::where('vendor_id', $vendorId)->find($serviceId);
+            if (!$service) return response()->json(['success' => false, 'message' => 'Service not found.'], 404);
+
+            $service->update([
+                'is_verified' => false,
+                'is_available' => false,
+                'rejection_reason' => $request->rejection_reason
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'Service rejected.', 'data' => $service]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to reject service.'], 500);
+        }
+    }
+
     public function reviewDocument(Request $request, $vendorId, $docId)
     {
         $user = auth()->user();
         if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized. Admin access required.'], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
 
         $request->validate([
@@ -261,13 +259,7 @@ class AdminVendorController extends Controller
 
         try {
             $document = VendorDocument::where('vendor_id', $vendorId)->find($docId);
-
-            if (!$document) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Document not found or does not belong to this vendor.'
-                ], 404);
-            }
+            if (!$document) return response()->json(['success' => false, 'message' => 'Document not found.'], 404);
 
             $updateData = [
                 'verification_status' => $request->status,
@@ -277,21 +269,16 @@ class AdminVendorController extends Controller
 
             if ($request->status === 'REJECTED') {
                 $updateData['rejection_reason'] = $request->rejection_reason;
+            } else {
+                $updateData['rejection_reason'] = null;
             }
 
             $document->update($updateData);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Document reviewed successfully.',
-                'data' => $document
-            ]);
+            return response()->json(['success' => true, 'message' => 'Document reviewed successfully.', 'data' => $document]);
         } catch (\Exception $e) {
             Log::error('Document Review Failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to review document: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to review document.'], 500);
         }
     }
 }

@@ -8,6 +8,7 @@ import {
   UserCheck, Settings, Briefcase, FileText, Loader2, Store,
   Building2, Package, FileCheck, FileX, Shield
 } from 'lucide-react';
+import { SkeletonCard, SkeletonTable, PageLoader } from '../components/SkeletonLoader';
 
 
 // --- OPTIMIZATION: MEMOIZED COMPONENTS ---
@@ -148,42 +149,54 @@ const DashboardPage = () => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        const usersRes = await api.get('/users');
-        setUsers(usersRes.data.data || []);
-
-        const eventsRes = await api.get('/events');
+        
+        // Fetch all data in parallel for speed
+        const [usersRes, eventsRes] = await Promise.all([
+          api.get('/users'),
+          api.get('/events')
+        ]);
+        
+        const usersData = usersRes.data.data || [];
         const basicEvents = eventsRes.data.data || [];
-
-        // Fetch vendor stats for SUPER_ADMIN
-        if (user?.role === 'SUPER_ADMIN') {
-          try {
-            const vendorsRes = await api.get('/admin/vendors');
-            const vendors = vendorsRes.data.data || [];
-            setVendorStats({
-              total: vendors.length,
-              pending: vendors.filter(v => v.status === 'PENDING_APPROVAL').length,
-              active: vendors.filter(v => v.status === 'ACTIVE').length,
-              blacklisted: vendors.filter(v => v.status === 'BLACKLISTED').length
-            });
-          } catch (err) {
-            console.error("Failed to load vendor stats", err);
-          }
-        }
-
+        
+        setUsers(usersData);
+        
+        // If no events, set empty and finish loading
         if (basicEvents.length === 0) {
             setEvents([]);
             setLoading(false);
             return;
         }
 
-        // OPTIMIZATION: Although this is N+1 on the backend, we run requests in parallel.
-        // Further optimization requires backend changes to return summary stats.
+        // Fetch vendor stats for SUPER_ADMIN (in parallel with event details)
+        let vendorStatsData = { total: 0, pending: 0, active: 0, blacklisted: 0 };
+        if (user?.role === 'SUPER_ADMIN') {
+          try {
+            const vendorsRes = await api.get('/admin/vendors');
+            const vendors = vendorsRes.data.data || [];
+            vendorStatsData = {
+              total: vendors.length,
+              pending: vendors.filter(v => v.status === 'PENDING_APPROVAL').length,
+              active: vendors.filter(v => v.status === 'ACTIVE').length,
+              blacklisted: vendors.filter(v => v.status === 'BLACKLISTED').length
+            };
+          } catch (err) {
+            console.error("Failed to load vendor stats", err);
+          }
+        }
+
+        // Fetch event details in parallel
         setLoadingDetails(true);
         const detailPromises = basicEvents.map(event => api.get(`/events/${event.id}`));
-        const detailResponses = await Promise.all(detailPromises);
+        const detailResponses = await Promise.allSettled(detailPromises);
         
-        const enrichedEvents = detailResponses.map(res => res.data.data);
+        // Filter successful responses
+        const enrichedEvents = detailResponses
+          .filter(res => res.status === 'fulfilled')
+          .map(res => res.value.data.data);
+        
         setEvents(enrichedEvents);
+        setVendorStats(vendorStatsData);
         setLoadingDetails(false);
 
       } catch (error) {
@@ -229,12 +242,25 @@ const DashboardPage = () => {
       return new Date(dateString).toLocaleDateString('en-TZ', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950">
-        <Loader2 className="animate-spin text-brand-600 mb-4" size={40} />
-        <p className="text-slate-600 dark:text-slate-400 font-medium">Loading Dashboard Data...</p>
-    </div>
-  );
+  if (loading) {
+    // Show skeleton loaders based on user role
+    if (user?.role === 'SUPER_ADMIN') {
+      return (
+        <div className="space-y-6">
+          <div>
+            <div className="h-8 w-48 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
+            <div className="h-4 w-72 bg-slate-200 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <SkeletonCard count={6} />
+          </div>
+          <SkeletonTable rows={5} />
+        </div>
+      );
+    }
+    
+    return <PageLoader message="Loading your dashboard..." />;
+  }
 
   return (
     <div className="space-y-6">

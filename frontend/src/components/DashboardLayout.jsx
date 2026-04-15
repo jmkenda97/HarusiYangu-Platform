@@ -3,6 +3,7 @@ import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import NotificationBell from './NotificationBell';
 
 const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -218,6 +219,9 @@ const DashboardLayout = () => {
                     </div>
 
                     <div className="flex items-center gap-4">
+                        {/* NOTIFICATION BELL */}
+                        <NotificationBell />
+
                         {/* THEME TOGGLE */}
                         <button 
                             onClick={() => {
