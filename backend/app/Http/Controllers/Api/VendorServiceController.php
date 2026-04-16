@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Vendor;
 use App\Models\VendorService;
+use App\Models\VendorDocument;
 use App\Http\Requests\Api\StoreVendorServiceRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -27,7 +28,10 @@ class VendorServiceController extends Controller
             ], 404);
         }
 
-        $services = VendorService::where('vendor_id', $vendor->id)
+        $services = VendorService::with(['documents' => function ($query) {
+                $query->orderBy('uploaded_at', 'desc');
+            }])
+            ->where('vendor_id', $vendor->id)
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -80,7 +84,9 @@ class VendorServiceController extends Controller
                     $this->createServiceDocument($vendor->id, $service->id, 'TIN_CERTIFICATE', $request->file('tin_certificate'));
                 }
 
-                return $service;
+                return $service->load(['documents' => function ($query) {
+                    $query->orderBy('uploaded_at', 'desc');
+                }]);
             });
 
             return response()->json([
@@ -144,32 +150,29 @@ class VendorServiceController extends Controller
             ], 404);
         }
 
-        // BLOCK editing if service is already verified
-        if ($service->is_verified) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Verified services cannot be edited. Contact admin support if changes are needed.'
-            ], 403);
-        }
-
         // Authorize via policy
         $this->authorize('manageServices', $vendor);
 
         try {
-            // PREVENT editing service_type - it's locked after creation
             $service->update([
                 'service_name' => $request->service_name,
-                // 'service_type' => $request->service_type, // LOCKED - cannot be changed
                 'description' => $request->description,
                 'min_price' => $request->min_price,
                 'max_price' => $request->max_price,
                 'price_unit' => $request->price_unit,
+                // Any vendor edit sends the service back to admin review.
+                'is_verified' => false,
+                'is_available' => false,
+                'verified_at' => null,
+                'rejection_reason' => null,
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Service updated successfully. It will be reviewed by admin.',
-                'data' => $service
+                'message' => 'Service updated successfully. It has been sent back for admin review.',
+                'data' => $service->load(['documents' => function ($query) {
+                    $query->orderBy('uploaded_at', 'desc');
+                }])
             ]);
         } catch (\Exception $e) {
             Log::error('Vendor Service Update Failed: ' . $e->getMessage());
@@ -248,16 +251,29 @@ class VendorServiceController extends Controller
 
         $request->validate([
             'status' => 'required|in:approved,rejected',
+            'rejection_reason' => 'required_if:status,rejected|string|max:500',
         ]);
 
         try {
             $service = VendorService::findOrFail($id);
 
             if ($request->status === 'approved') {
+                $pendingOrRejectedDocs = VendorDocument::where('service_id', $service->id)
+                    ->where('verification_status', '!=', 'APPROVED')
+                    ->count();
+
+                if ($pendingOrRejectedDocs > 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Approve all linked documents before approving this service.',
+                    ], 422);
+                }
+
                 $service->update([
                     'is_verified' => true,
                     'is_available' => true,
                     'verified_at' => now(),
+                    'rejection_reason' => null,
                 ]);
                 $message = 'Service approved and is now active.';
             } else {
@@ -265,6 +281,7 @@ class VendorServiceController extends Controller
                     'is_verified' => false,
                     'is_available' => false,
                     'verified_at' => null,
+                    'rejection_reason' => $request->rejection_reason,
                 ]);
                 $message = 'Service rejected and deactivated.';
             }

@@ -23,6 +23,20 @@ const VENDOR_SERVICES = [
     'SECURITY', 'VENUE', 'PRINTING', 'OTHER'
 ];
 
+const normalizePhone = (value) => value.replace(/\D/g, '');
+const normalizeOtp = (value) => value.replace(/\D/g, '').slice(0, 6);
+const getErrorMessage = (error, fallback) => {
+    const apiMessage = error.response?.data?.message;
+    const fieldErrors = error.response?.data?.errors;
+
+    if (fieldErrors && typeof fieldErrors === 'object') {
+        const firstFieldError = Object.values(fieldErrors).flat()[0];
+        if (firstFieldError) return firstFieldError;
+    }
+
+    return apiMessage || fallback;
+};
+
 const LandingPage = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -107,20 +121,29 @@ const LandingPage = () => {
     const handleRequestOtp = async (e) => {
         e.preventDefault(); setLoading(true); setMessage('');
         try {
+            const normalizedPhone = normalizePhone(phone);
+
+            if (normalizedPhone.length < 10) {
+                setMessage('Enter a valid phone number.');
+                return;
+            }
+
             if (authMode === 'register') {
-                const payload = { phone, role: accountType };
+                const payload = { phone: normalizedPhone, role: accountType };
                 const res = await api.post('/auth/register-otp', payload);
                 if (res.data.success) {
+                    setPhone(normalizedPhone);
                     setStep(2); setMessage(`OTP sent! (Code: ${res.data.data.debug_otp})`);
                 }
             } else {
-                const res = await api.post('/auth/request-otp', { phone, purpose: 'LOGIN' });
+                const res = await api.post('/auth/request-otp', { phone: normalizedPhone, purpose: 'LOGIN' });
                 if (res.data.success) {
+                    setPhone(normalizedPhone);
                     setStep(2); setMessage(`OTP sent! (Code: ${res.data.data.debug_otp})`);
                 }
             }
         } catch (err) {
-            setMessage(err.response?.data?.message || 'Failed to send OTP');
+            setMessage(getErrorMessage(err, 'Failed to send OTP'));
         } finally { setLoading(false); }
     };
 
@@ -129,26 +152,33 @@ const LandingPage = () => {
     const handleVerifyOtp = async (e) => {
         e.preventDefault(); setLoading(true); setMessage('');
         try {
+            const normalizedPhone = normalizePhone(phone);
+            const normalizedOtp = normalizeOtp(otp);
+
+            if (normalizedPhone.length < 10) {
+                setMessage('Enter a valid phone number.');
+                return;
+            }
+
+            if (normalizedOtp.length !== 6) {
+                setMessage('Enter the full 6-digit OTP code.');
+                return;
+            }
+
             if (authMode === 'register') {
-                // CRITICAL: We MUST send the role here
                 const res = await api.post('/auth/verify-register-otp', {
-                    phone,
-                    otp_code: otp,
-                    role: accountType // <--- THIS MUST BE HERE
+                    phone: normalizedPhone,
+                    otp_code: normalizedOtp,
                 });
 
                 if (res.data.success) {
-                    const { temp_token, user } = res.data.data;
-
-                    // Save Temp Token
-                    localStorage.setItem('harusiyangu_token', temp_token);
-                    api.defaults.headers.common['Authorization'] = `Bearer ${temp_token}`;
-
+                    setPhone(normalizedPhone);
+                    setOtp(normalizedOtp);
                     setStep(3);
                     setMessage('Phone verified! Please complete your profile.');
                 }
             } else {
-                const result = await login(phone, otp);
+                const result = await login(normalizedPhone, normalizedOtp);
                 if (result.success) {
                     handleCloseAuth();
                     // Navigate to dashboard immediately (role-based redirect handled by AuthContext)
@@ -161,7 +191,7 @@ const LandingPage = () => {
                 }
             }
         } catch (err) {
-            setMessage(err.response?.data?.message || 'Invalid or expired OTP');
+            setMessage(getErrorMessage(err, 'Invalid or expired OTP'));
         }
         finally { setLoading(false); }
     };
@@ -172,20 +202,35 @@ const LandingPage = () => {
         setLoading(true);
         setMessage('');
         try {
-            const dataPayload = new FormData();
+            const normalizedPhone = normalizePhone(phone);
 
-            dataPayload.append('first_name', formData.first_name);
-            dataPayload.append('middle_name', formData.middle_name);
-            dataPayload.append('last_name', formData.last_name);
-            dataPayload.append('email', formData.email);
-            dataPayload.append('password', formData.password);
-            dataPayload.append('password_confirmation', formData.password_confirmation);
-
-            if (formData.profile_photo_url) {
-                dataPayload.append('profile_photo_url', formData.profile_photo_url);
+            if (normalizedPhone.length < 10) {
+                setMessage('Phone number is missing. Please go back and verify your phone again.');
+                return;
             }
 
+            const basePayload = {
+                phone: normalizedPhone,
+                role: accountType,
+                first_name: formData.first_name,
+                middle_name: formData.middle_name,
+                last_name: formData.last_name,
+                email: formData.email,
+                password: formData.password,
+                password_confirmation: formData.password_confirmation,
+                profile_photo_url: formData.profile_photo_url,
+            };
+
+            let res;
             if (accountType === 'VENDOR') {
+                const dataPayload = new FormData();
+
+                Object.entries(basePayload).forEach(([key, value]) => {
+                    if (value !== undefined && value !== null) {
+                        dataPayload.append(key, value);
+                    }
+                });
+
                 dataPayload.append('business_name', formData.business_name);
                 dataPayload.append('service_type', formData.service_type);
                 dataPayload.append('address', formData.address || '');
@@ -202,11 +247,11 @@ const LandingPage = () => {
                 if (files.business_license) dataPayload.append('business_license', files.business_license);
                 if (files.brela_certificate) dataPayload.append('brela_certificate', files.brela_certificate);
                 if (files.tin_certificate) dataPayload.append('tin_certificate', files.tin_certificate);
-            }
 
-            const res = await api.post('/auth/complete-registration', dataPayload, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+                res = await api.post('/auth/complete-registration', dataPayload);
+            } else {
+                res = await api.post('/auth/complete-registration', basePayload);
+            }
 
             if (res.data.success) {
                 const { token, user } = res.data.data;
@@ -230,7 +275,7 @@ const LandingPage = () => {
             }
         } catch (error) {
             console.error(error);
-            setMessage(error.response?.data?.message || 'Failed to save profile.');
+            setMessage(getErrorMessage(error, 'Failed to save profile.'));
         }
         finally { setLoading(false); }
     };
@@ -451,7 +496,7 @@ const LandingPage = () => {
                                                 <label className="block text-sm font-bold text-slate-700 mb-2">Phone Number</label>
                                                 <div className="relative">
                                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400"><Phone size={20} /></div>
-                                                    <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="block w-full pl-12 pr-4 py-4 border border-slate-200 rounded-xl bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 transition-all text-base font-medium" placeholder="0712 345 678" required />
+                                                    <input type="text" value={phone} onChange={(e) => setPhone(normalizePhone(e.target.value))} className="block w-full pl-12 pr-4 py-4 border border-slate-200 rounded-xl bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 transition-all text-base font-medium" placeholder="0712 345 678" required />
                                                 </div>
                                             </div>
                                             <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-[#172554] text-white font-bold py-4 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5">{loading ? <RefreshCw className="animate-spin" size={20} /> : <span>Send Verification Code</span>}{!loading && <ChevronRight size={20} />}</button>
@@ -468,7 +513,7 @@ const LandingPage = () => {
                                         <form onSubmit={handleVerifyOtp} className="space-y-8">
                                             <div>
                                                 <label className="block text-sm font-bold text-slate-700 mb-4 text-center">Enter 6-Digit Code</label>
-                                                <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} className="block w-full py-5 border border-slate-200 rounded-2xl bg-slate-50 text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 transition-all text-center font-mono text-4xl tracking-[1em]" placeholder="000000" maxLength={6} required autoFocus />
+                                                <input type="text" value={otp} onChange={(e) => setOtp(normalizeOtp(e.target.value))} className="block w-full py-5 border border-slate-200 rounded-2xl bg-slate-50 text-slate-900 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-900/10 focus:border-blue-900 transition-all text-center font-mono text-4xl tracking-[1em]" placeholder="000000" maxLength={6} required autoFocus />
                                             </div>
                                             <button type="submit" disabled={loading} className="w-full bg-blue-900 hover:bg-[#172554] text-white font-bold py-4 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5">{loading ? <RefreshCw className="animate-spin" size={20} /> : <span>Verify & Continue</span>}</button>
                                         </form>

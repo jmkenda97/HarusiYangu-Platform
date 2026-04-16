@@ -11,6 +11,11 @@ class OtpVerification extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-
     protected $fillable = ['phone', 'otp_code', 'purpose', 'expires_at', 'is_used'];
+
+    protected $casts = [
+        'is_used' => 'boolean',
+        'expires_at' => 'datetime',
+        'created_at' => 'datetime',
+    ];
 }

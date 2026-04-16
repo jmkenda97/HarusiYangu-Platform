@@ -19,7 +19,7 @@ class AdminVendorController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Admin access required.'], 403);
         }
 
-        $query = Vendor::with(['user', 'services', 'documents']); // Ensure documents are loaded
+        $query = Vendor::with(['user', 'services.documents', 'documents.service']); // Ensure documents are loaded
 
         if ($request->has('status') && $request->status) $query->where('status', $request->status);
         if ($request->has('service_type') && $request->service_type) $query->where('service_type', $request->service_type);
@@ -80,7 +80,7 @@ class AdminVendorController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized. Admin access required.'], 403);
         }
 
-        $vendor = Vendor::with(['user', 'services', 'documents.reviewer', 'eventVendors.event'])->find($id);
+        $vendor = Vendor::with(['user', 'services.documents', 'documents.reviewer', 'documents.service', 'eventVendors.event'])->find($id);
         if (!$vendor) return response()->json(['success' => false, 'message' => 'Vendor not found.'], 404);
 
         // Add base64 data URI to all documents for browser display
@@ -205,12 +205,25 @@ class AdminVendorController extends Controller
         }
 
         try {
-            $service = \App\Models\VendorService::where('vendor_id', $vendorId)->find($serviceId);
+            $service = \App\Models\VendorService::with('documents')->where('vendor_id', $vendorId)->find($serviceId);
             if (!$service) return response()->json(['success' => false, 'message' => 'Service not found.'], 404);
+
+            if ($service->documents->isEmpty()) {
+                return response()->json(['success' => false, 'message' => 'This service has no linked verification documents.'], 422);
+            }
+
+            $unapprovedDocs = $service->documents->where('verification_status', '!=', 'APPROVED');
+            if ($unapprovedDocs->isNotEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Approve all linked documents before approving this service.'
+                ], 422);
+            }
 
             $service->update([
                 'is_verified' => true,
                 'is_available' => true,
+                'verified_at' => now(),
                 'rejection_reason' => null
             ]);
 
@@ -236,6 +249,7 @@ class AdminVendorController extends Controller
             $service->update([
                 'is_verified' => false,
                 'is_available' => false,
+                'verified_at' => null,
                 'rejection_reason' => $request->rejection_reason
             ]);
 
@@ -274,6 +288,14 @@ class AdminVendorController extends Controller
             }
 
             $document->update($updateData);
+
+            if ($document->service_id) {
+                $document->service()->update([
+                    'is_verified' => false,
+                    'is_available' => false,
+                    'verified_at' => null,
+                ]);
+            }
 
             return response()->json(['success' => true, 'message' => 'Document reviewed successfully.', 'data' => $document]);
         } catch (\Exception $e) {

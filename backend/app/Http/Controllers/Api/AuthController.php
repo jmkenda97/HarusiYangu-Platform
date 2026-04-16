@@ -23,15 +23,16 @@ class AuthController extends Controller
             'purpose' => 'required|string|in:LOGIN,REGISTER',
         ]);
 
+        $phone = $this->normalizePhone($request->phone);
         $otp = rand(100000, 999999);
         
         // Use an updateOrCreate to prevent flooding the table
         OtpVerification::updateOrCreate(
-            ['phone' => $request->phone, 'purpose' => $request->purpose],
+            ['phone' => $phone, 'purpose' => $request->purpose],
             [
                 'otp_code' => $otp,
                 'expires_at' => Carbon::now()->addMinutes(10),
-                'verified_at' => null
+                'is_used' => false,
             ]
         );
 
@@ -51,9 +52,13 @@ class AuthController extends Controller
             'purpose' => 'required|string|in:LOGIN,REGISTER',
         ]);
 
-        $verification = OtpVerification::where('phone', $request->phone)
-            ->where('otp_code', $request->otp_code)
+        $phone = $this->normalizePhone($request->phone);
+        $otpCode = $this->normalizeOtp($request->otp_code);
+
+        $verification = OtpVerification::where('phone', $phone)
+            ->where('otp_code', $otpCode)
             ->where('purpose', $request->purpose)
+            ->where('is_used', false)
             ->where('expires_at', '>', Carbon::now())
             ->first();
 
@@ -61,11 +66,11 @@ class AuthController extends Controller
             return response()->json(['success' => false, 'message' => 'Invalid or expired OTP'], 422);
         }
 
-        $verification->update(['verified_at' => Carbon::now()]);
+        $verification->update(['is_used' => true]);
 
         // If LOGIN, find user and issue token
         if ($request->purpose === 'LOGIN') {
-            $user = User::where('phone', $request->phone)->first();
+            $user = User::where('phone', $phone)->first();
             if (!$user) {
                 return response()->json(['success' => false, 'message' => 'User not found. Please register.'], 404);
             }
@@ -84,6 +89,68 @@ class AuthController extends Controller
         return response()->json(['success' => true, 'message' => 'Phone verified successfully']);
     }
 
+    public function requestRegistrationOtp(Request $request)
+    {
+        $request->validate([
+            'phone' => 'required|string',
+        ]);
+
+        $phone = $this->normalizePhone($request->phone);
+
+        // Check if user already exists
+        $user = User::where('phone', $phone)->first();
+        if ($user) {
+            return response()->json(['success' => false, 'message' => 'User already exists. Please login.'], 422);
+        }
+
+        $otp = rand(100000, 999999);
+        
+        OtpVerification::updateOrCreate(
+            ['phone' => $phone, 'purpose' => 'REGISTER'],
+            [
+                'otp_code' => $otp,
+                'expires_at' => Carbon::now()->addMinutes(10),
+                'is_used' => false,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'OTP sent successfully',
+            'data' => ['debug_otp' => $otp] // REMOVE IN PRODUCTION
+        ]);
+    }
+
+    public function verifyRegistrationOtp(Request $request)
+    {
+        $request->validate([
+            'phone' => 'required|string',
+            'otp_code' => 'required|string',
+        ]);
+
+        $phone = $this->normalizePhone($request->phone);
+        $otpCode = $this->normalizeOtp($request->otp_code);
+
+        $verification = OtpVerification::where('phone', $phone)
+            ->where('otp_code', $otpCode)
+            ->where('purpose', 'REGISTER')
+            ->where('is_used', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->first();
+
+        if (!$verification) {
+            return response()->json(['success' => false, 'message' => 'Invalid or expired OTP'], 422);
+        }
+
+        $verification->update(['is_used' => true]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Phone verified successfully',
+            'data' => ['phone' => $phone],
+        ]);
+    }
+
     public function completeRegistration(Request $request)
     {
         $request->validate([
@@ -96,87 +163,126 @@ class AuthController extends Controller
             'service_type' => 'required_if:role,VENDOR|string',
         ]);
 
+        $phone = $this->normalizePhone($request->phone);
+
+        if (User::where('phone', $phone)->exists()) {
+            return response()->json(['success' => false, 'message' => 'User already exists. Please login.'], 422);
+        }
+
         // Ensure phone was verified
-        $verification = OtpVerification::where('phone', $request->phone)
+        $verification = OtpVerification::where('phone', $phone)
             ->where('purpose', 'REGISTER')
-            ->whereNotNull('verified_at')
+            ->where('is_used', true)
             ->first();
 
         if (!$verification) {
             return response()->json(['success' => false, 'message' => 'Phone not verified'], 403);
         }
 
-        $user = User::create([
-            'id' => (string) \Str::uuid(),
-            'phone' => $request->phone,
-            'role' => $request->role,
-            'first_name' => $request->first_name,
-            'middle_name' => $request->middle_name,
-            'last_name' => $request->last_name,
-            'email' => $request->email,
-            'password_hash' => Hash::make($request->password),
-            'profile_photo_url' => $request->profile_photo_url,
-            'onboarding_completed' => true,
-        ]);
+        try {
+            return DB::transaction(function () use ($request, $verification, $phone) {
+                $user = User::create([
+                    'id' => (string) \Str::uuid(),
+                    'phone' => $phone,
+                    'role' => $request->role,
+                    'first_name' => $request->first_name,
+                    'middle_name' => $request->middle_name,
+                    'last_name' => $request->last_name,
+                    'email' => $request->email,
+                    'password_hash' => Hash::make($request->password),
+                    'profile_photo_url' => $request->profile_photo_url,
+                    'onboarding_completed' => true,
+                    'is_phone_verified' => true,
+                    'status' => 'ACTIVE',
+                ]);
 
-        // Update Vendor & Upload Documents
-        if ($user->role === 'VENDOR' && $user->vendor) {
-            $user->vendor->update([
-                'full_name' => $user->first_name . ' ' . $user->last_name,
-                'business_name' => $request->business_name,
-                'phone' => $user->phone,
-                'email' => $user->email,
-                'service_type' => $request->service_type,
-                'address' => $request->address ?? null,
-                'min_price' => $request->min_price ?? 0,
-                'max_price' => $request->max_price ?? null,
-            ]);
+                // Assign Role
+                $user->assignRole($request->role);
 
-            // CREATE DEFAULT SERVICE BASED ON SERVICE_TYPE (INACTIVE UNTIL VERIFIED)
-            $defaultService = \App\Models\VendorService::create([
-                'id' => (string) \Str::uuid(),
-                'vendor_id' => $user->vendor->id,
-                'service_name' => ucfirst(str_replace('_', ' ', strtolower($request->service_type))),
-                'service_type' => $request->service_type,
-                'description' => 'Professional ' . strtolower(str_replace('_', ' ', $request->service_type)) . ' services',
-                'min_price' => $request->min_price ?? 0,
-                'max_price' => $request->max_price ?? null,
-                'price_unit' => 'per_event',
-                'is_available' => false,
-                'is_verified' => false,
-            ]);
+                // Create Vendor Profile if role is VENDOR
+                if ($user->role === 'VENDOR') {
+                    $vendor = \App\Models\Vendor::create([
+                        'id' => (string) \Str::uuid(),
+                        'user_id' => $user->id,
+                        'full_name' => $user->first_name . ' ' . $user->last_name,
+                        'business_name' => $request->business_name,
+                        'phone' => $user->phone,
+                        'email' => $user->email,
+                        'service_type' => $request->service_type,
+                        'address' => $request->address ?? null,
+                        'min_price' => $request->min_price ?? 0,
+                        'max_price' => $request->max_price ?? null,
+                        'status' => 'PENDING_APPROVAL',
+                    ]);
 
-            // UPLOAD REQUIRED DOCUMENTS
-            if ($request->hasFile('business_license')) {
-                $path = $request->file('business_license')->store('vendor-documents', 'public');
-                $this->createVendorDocument($user->vendor->id, 'BUSINESS_LICENSE', $path, $request->file('business_license'), $defaultService->id);
-            }
-            if ($request->hasFile('brela_certificate')) {
-                $path = $request->file('brela_certificate')->store('vendor-documents', 'public');
-                $this->createVendorDocument($user->vendor->id, 'BRELA_CERTIFICATE', $path, $request->file('brela_certificate'), $defaultService->id);
-            }
-            if ($request->hasFile('tin_certificate')) {
-                $path = $request->file('tin_certificate')->store('vendor-documents', 'public');
-                $this->createVendorDocument($user->vendor->id, 'TIN_CERTIFICATE', $path, $request->file('tin_certificate'), $defaultService->id);
-            }
+                    // Initialize Vendor Wallet
+                    \App\Models\VendorWallet::create([
+                        'id' => (string) \Str::uuid(),
+                        'vendor_id' => $vendor->id,
+                        'available_balance' => 0,
+                        'pending_balance' => 0,
+                        'total_earnings' => 0,
+                    ]);
 
-            // SEND EMAIL: DOCUMENTS RECEIVED
-            if ($user->email) {
-                Mail::to($user->email)->send(new \App\Mail\VendorStatusChange($user, 'PENDING_APPROVAL', "We have received your documents and are reviewing them."));
-            }
+                    // Create Default Service
+                    $defaultService = \App\Models\VendorService::create([
+                        'id' => (string) \Str::uuid(),
+                        'vendor_id' => $vendor->id,
+                        'service_name' => ucfirst(str_replace('_', ' ', strtolower($request->service_type))),
+                        'service_type' => $request->service_type,
+                        'description' => 'Professional ' . strtolower(str_replace('_', ' ', $request->service_type)) . ' services',
+                        'min_price' => $request->min_price ?? 0,
+                        'max_price' => $request->max_price ?? null,
+                        'price_unit' => 'per_event',
+                        'is_available' => false,
+                        'is_verified' => false,
+                    ]);
+
+                    // Handle Documents
+                    if ($request->hasFile('business_license')) {
+                        $path = $request->file('business_license')->store('vendor-documents', 'public');
+                        $this->createVendorDocument($vendor->id, 'BUSINESS_LICENSE', $path, $request->file('business_license'), $defaultService->id);
+                    }
+                    if ($request->hasFile('brela_certificate')) {
+                        $path = $request->file('brela_certificate')->store('vendor-documents', 'public');
+                        $this->createVendorDocument($vendor->id, 'BRELA_CERTIFICATE', $path, $request->file('brela_certificate'), $defaultService->id);
+                    }
+                    if ($request->hasFile('tin_certificate')) {
+                        $path = $request->file('tin_certificate')->store('vendor-documents', 'public');
+                        $this->createVendorDocument($vendor->id, 'TIN_CERTIFICATE', $path, $request->file('tin_certificate'), $defaultService->id);
+                    }
+
+                    // Send Email notification for vendor registration
+                    if ($user->email) {
+                        try {
+                            Mail::to($user->email)->send(new \App\Mail\VendorStatusChange($user, 'PENDING_APPROVAL', "We have received your documents and are reviewing them."));
+                        } catch (\Exception $e) {
+                            \Log::error('Mail sending failed: ' . $e->getMessage());
+                        }
+                    }
+                }
+
+                $token = $user->createToken('auth_token')->plainTextToken;
+                $verification->delete();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Registration complete!',
+                    'data' => [
+                        'user' => new UserResource($user),
+                        'token' => $token,
+                        'token_type' => 'Bearer'
+                    ]
+                ]);
+            });
+        } catch (\Exception $e) {
+            \Log::error('Registration Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Registration failed. Please try again later.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Registration complete! Your account is under review.',
-            'data' => [
-                'user' => new UserResource($user),
-                'token' => $token,
-                'token_type' => 'Bearer'
-            ]
-        ]);
     }
 
     public function logout(Request $request)
@@ -238,5 +344,15 @@ class AuthController extends Controller
         } catch (\Exception $e) {
             \Log::error('Failed to save vendor document: ' . $e->getMessage());
         }
+    }
+
+    private function normalizePhone(?string $phone): string
+    {
+        return preg_replace('/\D+/', '', (string) $phone);
+    }
+
+    private function normalizeOtp(?string $otp): string
+    {
+        return substr(preg_replace('/\D+/', '', (string) $otp), 0, 6);
     }
 }

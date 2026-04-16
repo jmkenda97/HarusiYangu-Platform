@@ -29,7 +29,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
         Route::post('/register-otp', [AuthController::class, 'requestRegistrationOtp']);
         Route::post('/verify-register-otp', [AuthController::class, 'verifyRegistrationOtp']);
-        Route::post('/complete-registration', [AuthController::class, 'completeRegistration'])->middleware('auth:sanctum');
+        Route::post('/complete-registration', [AuthController::class, 'completeRegistration']);
         Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
     });
 

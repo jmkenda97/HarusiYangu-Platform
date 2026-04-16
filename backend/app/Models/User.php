@@ -57,7 +57,7 @@ class User extends Authenticatable
             return 'SUPER_ADMIN';
         }
 
-        $spatieRole = $this->hasRole('SUPER_ADMIN') ? 'SUPER_ADMIN' : ($this->hasRole('HOST') ? 'HOST' : null);
+        $spatieRole = $this->hasRole('SUPER_ADMIN') ? 'SUPER_ADMIN' : ($this->hasRole('HOST') ? 'HOST' : ($this->hasRole('VENDOR') ? 'VENDOR' : null));
         if ($spatieRole) {
             return $spatieRole;
         }

@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Vendor;
 use App\Models\VendorDocument;
+use App\Models\VendorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class VendorDocumentController extends Controller
 {
@@ -28,7 +30,8 @@ class VendorDocumentController extends Controller
             ], 404);
         }
 
-        $documents = VendorDocument::where('vendor_id', $vendor->id)
+        $documents = VendorDocument::with('service')
+            ->where('vendor_id', $vendor->id)
             ->orderBy('uploaded_at', 'desc')
             ->get()
             ->map(function ($document) {
@@ -71,8 +74,8 @@ class VendorDocumentController extends Controller
     {
         $request->validate([
             'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'document_type' => 'required|string|in:BUSINESS_LICENSE,TIN_CERTIFICATE,PORTFOLIO,INSURANCE,OTHER',
-            'document_name' => 'required|string|max:255',
+            'document_type' => 'required|string|in:BUSINESS_LICENSE,BRELA_CERTIFICATE,TIN_CERTIFICATE,PORTFOLIO,INSURANCE,OTHER',
+            'document_name' => 'nullable|string|max:255',
             'service_id' => 'nullable|exists:vendor_services,id',
         ], [
             'file.required' => 'A file is required.',
@@ -99,16 +102,17 @@ class VendorDocumentController extends Controller
         $this->authorize('manageDocuments', $vendor);
 
         try {
+            $service = $this->resolveOwnedService($request->service_id, $vendor->id);
             $file = $request->file('file');
             $filePath = Storage::disk('public')->putFile('vendor-documents', $file);
 
-            $document = DB::transaction(function () use ($request, $vendor, $file, $filePath) {
+            $document = DB::transaction(function () use ($request, $vendor, $service, $file, $filePath) {
                 return VendorDocument::create([
                     'id' => Str::uuid(),
                     'vendor_id' => $vendor->id,
-                    'service_id' => $request->service_id,
+                    'service_id' => $service?->id,
                     'document_type' => $request->document_type,
-                    'document_name' => $request->document_name,
+                    'document_name' => $request->document_name ?: $this->defaultDocumentName($request->document_type, $file->getClientOriginalName()),
                     'file_url' => $filePath,
                     'mime_type' => $file->getMimeType(),
                     'file_size' => $file->getSize(),
@@ -116,6 +120,10 @@ class VendorDocumentController extends Controller
                     'uploaded_at' => now(),
                 ]);
             });
+
+            if ($service) {
+                $this->markServicePendingReview($service);
+            }
 
             // Add base64 data URI to response (like profile photos)
             try {
@@ -129,7 +137,7 @@ class VendorDocumentController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Document uploaded successfully',
-                'data' => $document
+                'data' => $document->load('service')
             ], 201);
         } catch (\Exception $e) {
             Log::error('Vendor Document Upload Failed: ' . $e->getMessage());
@@ -223,19 +231,12 @@ class VendorDocumentController extends Controller
             ], 404);
         }
 
-        // RESTRICTION: Cannot update APPROVED documents
-        if ($document->verification_status === 'APPROVED') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot update verified documents. Contact admin if you need to change this document.'
-            ], 403);
-        }
-
         $request->validate([
-            'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'document_name' => 'sometimes|string|max:255',
+            'document_type' => 'sometimes|string|in:BUSINESS_LICENSE,BRELA_CERTIFICATE,TIN_CERTIFICATE,PORTFOLIO,INSURANCE,OTHER',
+            'service_id' => 'nullable|exists:vendor_services,id',
         ], [
-            'file.required' => 'A file is required.',
             'file.file' => 'The uploaded item must be a file.',
             'file.mimes' => 'File must be a PDF, JPG, JPEG, or PNG.',
             'file.max' => 'File size must not exceed 5MB.',
@@ -245,33 +246,49 @@ class VendorDocumentController extends Controller
         $this->authorize('manageDocuments', $vendor);
 
         try {
+            $service = $this->resolveOwnedService($request->has('service_id') ? $request->service_id : $document->service_id, $vendor->id);
+            $previousServiceId = $document->service_id;
             $file = $request->file('file');
-            
-            // Delete old file
-            if ($document->file_url && Storage::disk('public')->exists($document->file_url)) {
-                Storage::disk('public')->delete($document->file_url);
-            }
 
-            // Upload new file
-            $filePath = Storage::disk('public')->putFile('vendor-documents', $file);
-
-            // Update document
-            $document->update([
-                'file_url' => $filePath,
-                'mime_type' => $file->getMimeType(),
-                'file_size' => $file->getSize(),
-                'verification_status' => 'PENDING', // Reset to pending for re-review
+            $updateData = [
+                'service_id' => $service?->id,
+                'document_type' => $request->document_type ?? $document->document_type,
                 'document_name' => $request->document_name ?? $document->document_name,
+                'verification_status' => 'PENDING',
                 'reviewed_by' => null,
                 'reviewed_at' => null,
                 'rejection_reason' => null,
-            ]);
+            ];
+
+            if ($file) {
+                if ($document->file_url && Storage::disk('public')->exists($document->file_url)) {
+                    Storage::disk('public')->delete($document->file_url);
+                }
+
+                $filePath = Storage::disk('public')->putFile('vendor-documents', $file);
+                $updateData['file_url'] = $filePath;
+                $updateData['mime_type'] = $file->getMimeType();
+                $updateData['file_size'] = $file->getSize();
+            }
+
+            $document->update($updateData);
+
+            if ($previousServiceId) {
+                $this->markServicePendingReviewById($previousServiceId);
+            }
+            if ($service) {
+                $this->markServicePendingReview($service);
+            }
 
             // Add base64 data URI to response (like profile photos)
             try {
-                $fileContent = Storage::disk('public')->get($filePath);
-                $base64 = base64_encode($fileContent);
-                $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;
+                if ($document->file_url && Storage::disk('public')->exists($document->file_url)) {
+                    $fileContent = Storage::disk('public')->get($document->file_url);
+                    $base64 = base64_encode($fileContent);
+                    $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;
+                } else {
+                    $document->file_url_full = null;
+                }
             } catch (\Exception $e) {
                 $document->file_url_full = null;
             }
@@ -279,7 +296,7 @@ class VendorDocumentController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Document updated successfully. It will be reviewed again by admin.',
-                'data' => $document
+                'data' => $document->load('service')
             ]);
         } catch (\Exception $e) {
             Log::error('Vendor Document Update Failed: ' . $e->getMessage());
@@ -336,6 +353,57 @@ class VendorDocumentController extends Controller
                 'success' => false,
                 'message' => 'Failed to serve file: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    private function resolveOwnedService($serviceId, $vendorId): ?VendorService
+    {
+        if (!$serviceId) {
+            return null;
+        }
+
+        $service = VendorService::where('id', $serviceId)
+            ->where('vendor_id', $vendorId)
+            ->first();
+
+        if (!$service) {
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'message' => 'The selected service does not belong to your account.',
+            ], 422));
+        }
+
+        return $service;
+    }
+
+    private function defaultDocumentName(string $documentType, string $originalName): string
+    {
+        return str_replace('_', ' ', $documentType) . ' - ' . $originalName;
+    }
+
+    private function markServicePendingReview(?VendorService $service): void
+    {
+        if (!$service) {
+            return;
+        }
+
+        $service->update([
+            'is_verified' => false,
+            'is_available' => false,
+            'verified_at' => null,
+            'rejection_reason' => null,
+        ]);
+    }
+
+    private function markServicePendingReviewById(?string $serviceId): void
+    {
+        if (!$serviceId) {
+            return;
+        }
+
+        $service = VendorService::find($serviceId);
+        if ($service) {
+            $this->markServicePendingReview($service);
         }
     }
 }

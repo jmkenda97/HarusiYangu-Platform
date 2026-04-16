@@ -19,9 +19,16 @@ class VendorCatalogController extends Controller
     {
         $query = Vendor::with(['services' => function ($q) {
             $q->where('is_available', true)
-              ->where('is_verified', true); // ONLY verified services
+              ->where('is_verified', true)
+              ->with(['documents' => function ($docQuery) {
+                  $docQuery->where('verification_status', 'APPROVED');
+              }]); // ONLY verified services
         }])
-            ->where('status', 'ACTIVE');
+            ->where('status', 'ACTIVE')
+            ->whereHas('services', function ($q) {
+                $q->where('is_available', true)
+                    ->where('is_verified', true);
+            });
 
         // Filter by service_type (vendor's primary type OR any of their services)
         if ($request->has('service_type') && $request->service_type) {
@@ -84,13 +91,21 @@ class VendorCatalogController extends Controller
         $vendor = Vendor::with([
             'services' => function ($q) {
                 $q->where('is_available', true)
-                  ->where('is_verified', true); // ONLY verified & available services
+                  ->where('is_verified', true)
+                  ->with(['documents' => function ($docQuery) {
+                      $docQuery->where('verification_status', 'APPROVED');
+                  }]); // ONLY verified & available services
             },
             'documents' => function ($q) {
-                $q->where('verification_status', 'APPROVED');
+                $q->where('verification_status', 'APPROVED')
+                    ->whereNull('service_id');
             }
         ])
             ->where('status', 'ACTIVE')
+            ->whereHas('services', function ($q) {
+                $q->where('is_available', true)
+                    ->where('is_verified', true);
+            })
             ->find($id);
 
         if (!$vendor) {

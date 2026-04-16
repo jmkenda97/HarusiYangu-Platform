@@ -85,7 +85,7 @@ const DocumentTypeBadge = React.memo(({ type }) => {
     );
 });
 
-const VendorDetailRow = React.memo(({ vendor, index }) => {
+const VendorDetailRow = React.memo(({ vendor, index, showToast }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [vendorDetails, setVendorDetails] = useState(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
@@ -119,14 +119,16 @@ const VendorDetailRow = React.memo(({ vendor, index }) => {
         setActionLoading(action);
         try {
             const payload = reason ? { rejection_reason: reason } : {};
-            await api.put(`/admin/vendors/${vendor.id}/${action}`, payload);
+            const res = await api.put(`/admin/vendors/${vendor.id}/${action}`, payload);
             if (action === 'approve') vendor.status = 'ACTIVE';
             if (action === 'reject') vendor.status = 'INACTIVE';
             if (action === 'block') vendor.status = 'BLACKLISTED';
             if (action === 'unblock') vendor.status = 'ACTIVE';
+            showToast(res.data?.message || 'Vendor status updated.');
             return true;
         } catch (error) {
             console.error(`Failed to ${action} vendor`, error);
+            showToast(error.response?.data?.message || `Failed to ${action} vendor.`, 'error');
             return false;
         } finally {
             setActionLoading(null);
@@ -138,20 +140,29 @@ const VendorDetailRow = React.memo(({ vendor, index }) => {
         try {
             const payload = { status };
             if (reason) payload.rejection_reason = reason;
-            await api.put(`/admin/vendors/${vendor.id}/documents/${docId}/review`, payload);
+            const res = await api.put(`/admin/vendors/${vendor.id}/documents/${docId}/review`, payload);
             
             if (vendorDetails) {
+                const reviewedDoc = vendorDetails.documents.find(doc => doc.id === docId);
                 const updatedDocs = vendorDetails.documents.map(doc => {
                     if (doc.id === docId) {
                         return { ...doc, verification_status: status, rejection_reason: reason };
                     }
                     return doc;
                 });
-                setVendorDetails({ ...vendorDetails, documents: updatedDocs });
+                const updatedServices = reviewedDoc?.service_id ? vendorDetails.services.map(service => {
+                    if (service.id === reviewedDoc.service_id) {
+                        return { ...service, is_verified: false, is_available: false };
+                    }
+                    return service;
+                }) : vendorDetails.services;
+                setVendorDetails({ ...vendorDetails, documents: updatedDocs, services: updatedServices });
             }
+            showToast(res.data?.message || 'Document review saved.');
             return true;
         } catch (error) {
             console.error('Failed to review document', error);
+            showToast(error.response?.data?.message || 'Failed to review document.', 'error');
             return false;
         } finally {
             setDocReviewLoading(null);
@@ -164,7 +175,7 @@ const VendorDetailRow = React.memo(({ vendor, index }) => {
             const isApprove = status === 'approve' || status === 'approved';
             const payload = !isApprove ? { rejection_reason: reason } : {};
             const endpoint = `/admin/vendors/${vendor.id}/services/${serviceId}/${isApprove ? 'approve' : 'reject'}`;
-            await api.put(endpoint, payload);
+            const res = await api.put(endpoint, payload);
             
             if (vendorDetails) {
                 const updatedServices = vendorDetails.services.map(s => {
@@ -180,9 +191,11 @@ const VendorDetailRow = React.memo(({ vendor, index }) => {
                 });
                 setVendorDetails({ ...vendorDetails, services: updatedServices });
             }
+            showToast(res.data?.message || 'Service review saved.');
             return true;
         } catch (error) {
             console.error('Failed to review service', error);
+            showToast(error.response?.data?.message || 'Failed to review service.', 'error');
             return false;
         } finally {
             setServiceReviewLoading(null);
@@ -493,7 +506,7 @@ const AdminVendorsPage = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {loading ? <tr><td colSpan="7" className="px-6 py-12 text-center"><div className="flex items-center justify-center gap-2 text-slate-400"><Loader2 size={20} className="animate-spin" />Loading vendors...</div></td></tr> : vendors.length === 0 ? <tr><td colSpan="7" className="px-6 py-12 text-center"><div className="flex flex-col items-center gap-3 text-slate-400"><Store size={40} className="opacity-50" /><p>No vendors found.</p></div></td></tr> : paginatedVendors.map((vendor, idx) => (
-                                <VendorDetailRow key={vendor.id} vendor={vendor} index={(currentPage - 1) * itemsPerPage + idx + 1} />
+                                <VendorDetailRow key={vendor.id} vendor={vendor} index={(currentPage - 1) * itemsPerPage + idx + 1} showToast={showToast} />
                             ))}
                         </tbody>
                     </table>

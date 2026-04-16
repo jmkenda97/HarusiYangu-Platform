@@ -36,6 +36,8 @@ const paginate = (array, page_number, page_size) => {
     return array.slice((page_number - 1) * page_size, page_number * page_size);
 };
 
+const getDocumentViewUrl = (documentId) => `${api.defaults.baseURL}/vendors/documents/${documentId}/view`;
+
 const VendorCard = ({ vendor, onViewProfile }) => {
     // Only show verified services in the catalog card
     const activeServices = useMemo(() => {
@@ -377,6 +379,55 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                             ))}
                         </div>
                     </div>
+
+                    {(vendor.documents?.length > 0 || vendor.services?.some(service => (service.documents?.length || 0) > 0)) && (
+                        <div className="mt-12 pt-8 border-t border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center justify-between mb-8">
+                                <h4 className="text-xl font-black text-slate-900 dark:text-white">Approved Documents</h4>
+                                <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1 rounded-full text-xs font-bold">Compliance Ready</span>
+                            </div>
+
+                            {vendor.documents?.length > 0 && (
+                                <div className="mb-6">
+                                    <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">General Vendor Documents</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {vendor.documents.map(doc => (
+                                            <div key={doc.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
+                                                <div>
+                                                    <p className="font-bold text-slate-900 dark:text-white">{doc.document_name}</p>
+                                                    <p className="text-xs text-slate-400 uppercase">{formatServiceType(doc.document_type)}</p>
+                                                </div>
+                                                <button type="button" onClick={() => window.open(getDocumentViewUrl(doc.id), '_blank', 'noopener,noreferrer')} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                                                    <ExternalLink size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="space-y-6">
+                                {vendor.services?.filter(service => (service.documents?.length || 0) > 0).map(service => (
+                                    <div key={service.id}>
+                                        <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">{service.service_name}</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {service.documents.map(doc => (
+                                                <div key={doc.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="font-bold text-slate-900 dark:text-white">{doc.document_name}</p>
+                                                        <p className="text-xs text-slate-400 uppercase">{formatServiceType(doc.document_type)}</p>
+                                                    </div>
+                                                    <button type="button" onClick={() => window.open(getDocumentViewUrl(doc.id), '_blank', 'noopener,noreferrer')} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                                                        <ExternalLink size={16} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -389,6 +440,7 @@ const VendorCatalogPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [serviceTypeFilter, setServiceTypeFilter] = useState('');
     const [selectedVendor, setSelectedVendor] = useState(null);
+    const [loadingVendorProfile, setLoadingVendorProfile] = useState(false);
     const [userEvents, setUserEvents] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 9;
@@ -434,6 +486,19 @@ const VendorCatalogPage = () => {
             setUserEvents(res.data.data || []);
         } catch (err) {
             console.error('Failed to fetch events:', err);
+        }
+    };
+
+    const openVendorProfile = async (vendor) => {
+        setLoadingVendorProfile(true);
+        try {
+            const res = await api.get(`/vendor-catalog/${vendor.id}`);
+            setSelectedVendor(res.data.data);
+        } catch (err) {
+            console.error('Failed to fetch vendor profile:', err);
+            setSelectedVendor(vendor);
+        } finally {
+            setLoadingVendorProfile(false);
         }
     };
 
@@ -515,11 +580,7 @@ const VendorCatalogPage = () => {
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {displayedVendors.map(vendor => (
-                            <VendorCard 
-                                key={vendor.id} 
-                                vendor={vendor} 
-                                onViewProfile={setSelectedVendor}
-                            />
+                            <VendorCard key={vendor.id} vendor={vendor} onViewProfile={openVendorProfile} />
                         ))}
                     </div>
 
@@ -547,6 +608,15 @@ const VendorCatalogPage = () => {
                         </div>
                     )}
                 </>
+            )}
+
+            {loadingVendorProfile && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+                    <div className="rounded-2xl bg-white dark:bg-slate-900 px-6 py-4 shadow-xl flex items-center gap-3">
+                        <Loader2 size={20} className="animate-spin text-brand-600" />
+                        <span className="font-medium text-slate-700 dark:text-slate-200">Loading vendor profile...</span>
+                    </div>
+                </div>
             )}
 
             {selectedVendor && (
