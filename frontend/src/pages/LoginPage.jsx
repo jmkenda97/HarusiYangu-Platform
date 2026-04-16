@@ -27,6 +27,7 @@ const normalizePhone = (value) => value.replace(/\D/g, '');
 const normalizeOtp = (value) => value.replace(/\D/g, '').slice(0, 6);
 const getErrorMessage = (error, fallback) => {
     const apiMessage = error.response?.data?.message;
+    const apiError = error.response?.data?.error;
     const fieldErrors = error.response?.data?.errors;
 
     if (fieldErrors && typeof fieldErrors === 'object') {
@@ -34,7 +35,12 @@ const getErrorMessage = (error, fallback) => {
         if (firstFieldError) return firstFieldError;
     }
 
-    return apiMessage || fallback;
+    // Prioritize specific error details if the message is too generic
+    if (apiMessage === 'Registration failed. Please try again later.' && apiError) {
+        return apiError;
+    }
+
+    return apiMessage || apiError || fallback;
 };
 
 const LandingPage = () => {
@@ -248,7 +254,11 @@ const LandingPage = () => {
                 if (files.brela_certificate) dataPayload.append('brela_certificate', files.brela_certificate);
                 if (files.tin_certificate) dataPayload.append('tin_certificate', files.tin_certificate);
 
-                res = await api.post('/auth/complete-registration', dataPayload);
+                res = await api.post('/auth/complete-registration', dataPayload, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                });
             } else {
                 res = await api.post('/auth/complete-registration', basePayload);
             }

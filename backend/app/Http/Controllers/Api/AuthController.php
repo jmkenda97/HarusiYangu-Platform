@@ -25,7 +25,7 @@ class AuthController extends Controller
 
         $phone = $this->normalizePhone($request->phone);
         $otp = rand(100000, 999999);
-        
+
         // Use an updateOrCreate to prevent flooding the table
         OtpVerification::updateOrCreate(
             ['phone' => $phone, 'purpose' => $request->purpose],
@@ -104,7 +104,7 @@ class AuthController extends Controller
         }
 
         $otp = rand(100000, 999999);
-        
+
         OtpVerification::updateOrCreate(
             ['phone' => $phone, 'purpose' => 'REGISTER'],
             [
@@ -161,6 +161,10 @@ class AuthController extends Controller
             'password' => 'required|string|min:6|confirmed',
             'business_name' => 'required_if:role,VENDOR|string',
             'service_type' => 'required_if:role,VENDOR|string',
+            // VALIDATION FOR DOCUMENTS
+            'business_license' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'brela_certificate' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'tin_certificate' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
         ]);
 
         $phone = $this->normalizePhone($request->phone);
@@ -298,7 +302,7 @@ class AuthController extends Controller
     {
         $notifications = auth()->user()->notifications()->latest()->limit(20)->get();
         $unreadCount = auth()->user()->unreadNotifications()->count();
-        
+
         return response()->json([
             'success' => true,
             'data' => $notifications,
@@ -313,7 +317,7 @@ class AuthController extends Controller
     {
         $notification = auth()->user()->notifications()->findOrFail($id);
         $notification->markAsRead();
-        
+
         return response()->json(['success' => true]);
     }
 
@@ -328,22 +332,22 @@ class AuthController extends Controller
 
     private function createVendorDocument($vendorId, $type, $path, $file, $serviceId = null)
     {
-        try {
-            \App\Models\VendorDocument::create([
-                'id' => (string) \Str::uuid(),
-                'vendor_id' => $vendorId,
-                'service_id' => $serviceId,
-                'document_type' => $type,
-                'document_name' => str_replace('_', ' ', $type) . ' - ' . $file->getClientOriginalName(),
-                'file_url' => $path,
-                'mime_type' => $file->getClientMimeType(),
-                'file_size' => $file->getSize(),
-                'verification_status' => 'PENDING',
-                'uploaded_at' => now(),
-            ]);
-        } catch (\Exception $e) {
-            \Log::error('Failed to save vendor document: ' . $e->getMessage());
-        }
+        // The try-catch block was removed.
+        // This ensures that if creating the document record in the database fails,
+        // the main transaction in completeRegistration will be rolled back,
+        // preventing a partial registration where the user is created but their document is missing.
+        \App\Models\VendorDocument::create([
+            'id' => (string) \Str::uuid(),
+            'vendor_id' => $vendorId,
+            'service_id' => $serviceId,
+            'document_type' => $type,
+            'document_name' => str_replace('_', ' ', $type) . ' - ' . $file->getClientOriginalName(),
+            'file_url' => $path,
+            'mime_type' => $file->getClientMimeType(),
+            'file_size' => $file->getSize(),
+            'verification_status' => 'PENDING',
+            'uploaded_at' => now(),
+        ]);
     }
 
     private function normalizePhone(?string $phone): string

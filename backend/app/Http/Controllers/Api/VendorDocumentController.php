@@ -40,12 +40,7 @@ class VendorDocumentController extends Controller
                     $filePath = $document->file_url;
                     
                     // Remove leading /storage/ or storage/ if present
-                    if (strpos($filePath, '/storage/') === 0) {
-                        $filePath = substr($filePath, strlen('/storage/'));
-                    }
-                    if (strpos($filePath, 'storage/') === 0) {
-                        $filePath = substr($filePath, strlen('storage/'));
-                    }
+                    $filePath = preg_replace('/^\/?storage\//', '', $filePath);
                     
                     if (Storage::disk('public')->exists($filePath)) {
                         $fileContent = Storage::disk('public')->get($filePath);

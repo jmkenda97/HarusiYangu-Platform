@@ -268,6 +268,40 @@ const VendorProfilePage = () => {
         }
     };
 
+    const [previewDoc, setPreviewDoc] = useState(null);
+
+    const PreviewModal = ({ doc, onClose }) => {
+        if (!doc) return null;
+        
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+                <div className="flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                                <FileText size={20} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">{doc.document_name}</h3>
+                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{doc.document_type.replace('_', ' ')}</p>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-auto bg-slate-100 p-4 flex items-center justify-center">
+                        {doc.mime_type?.includes('pdf') ? (
+                            <iframe src={doc.file_url_full} title={doc.document_name} className="h-full w-full rounded-lg bg-white shadow-sm border-0" />
+                        ) : (
+                            <img src={doc.file_url_full} alt={doc.document_name} className="max-h-full max-w-full rounded-lg shadow-lg object-contain" />
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const handleDeleteDocument = async (document) => {
         if (!window.confirm(`Delete document "${document.document_name}"?`)) return;
         try {
@@ -281,8 +315,11 @@ const VendorProfilePage = () => {
     };
 
     const previewDocument = (document) => {
-        if (document.file_url_full) window.open(document.file_url_full, '_blank', 'noopener,noreferrer');
-        else showToast('Preview is not available for this document.', 'error');
+        if (document.file_url_full) {
+            setPreviewDoc(document);
+        } else {
+            showToast('Preview is not available for this document.', 'error');
+        }
     };
 
     const serviceBadge = (service) => {
@@ -445,6 +482,8 @@ const VendorProfilePage = () => {
                     <div className="flex justify-end gap-3"><button type="button" onClick={resetDocumentModal} className="rounded-xl border border-slate-200 px-4 py-2.5 font-bold text-slate-700 hover:bg-slate-50">Cancel</button><button type="submit" disabled={savingDocument} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 font-bold text-white hover:bg-brand-700 disabled:opacity-60">{savingDocument ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}{editingDocument ? 'Update Document' : 'Upload Document'}</button></div>
                 </form>
             </Modal>}
+
+            {previewDoc && <PreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
         </div>
     );
 };

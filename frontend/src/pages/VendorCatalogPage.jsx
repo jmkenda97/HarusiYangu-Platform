@@ -145,6 +145,40 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
         }
     };
 
+    const [previewDoc, setPreviewDoc] = useState(null);
+
+    const PreviewModal = ({ doc, onClose }) => {
+        if (!doc) return null;
+        
+        return (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={onClose}>
+                <div className="flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                                <FileText size={20} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">{doc.document_name}</h3>
+                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{doc.document_type.replace('_', ' ')}</p>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-auto bg-slate-100 p-4 flex items-center justify-center">
+                        {doc.mime_type?.includes('pdf') ? (
+                            <iframe src={doc.file_url_full || getDocumentViewUrl(doc.id)} title={doc.document_name} className="h-full w-full rounded-lg bg-white shadow-sm border-0" />
+                        ) : (
+                            <img src={doc.file_url_full || getDocumentViewUrl(doc.id)} alt={doc.document_name} className="max-h-full max-w-full rounded-lg shadow-lg object-contain" />
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const handleSendInquiry = async (e) => {
         e.preventDefault();
         if (!selectedEvent || !inquiryForm.budget_item_id) return;
@@ -397,7 +431,7 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                                                     <p className="font-bold text-slate-900 dark:text-white">{doc.document_name}</p>
                                                     <p className="text-xs text-slate-400 uppercase">{formatServiceType(doc.document_type)}</p>
                                                 </div>
-                                                <button type="button" onClick={() => window.open(getDocumentViewUrl(doc.id), '_blank', 'noopener,noreferrer')} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                                                <button type="button" onClick={() => setPreviewDoc(doc)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20">
                                                     <ExternalLink size={16} />
                                                 </button>
                                             </div>
@@ -417,7 +451,7 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                                                         <p className="font-bold text-slate-900 dark:text-white">{doc.document_name}</p>
                                                         <p className="text-xs text-slate-400 uppercase">{formatServiceType(doc.document_type)}</p>
                                                     </div>
-                                                    <button type="button" onClick={() => window.open(getDocumentViewUrl(doc.id), '_blank', 'noopener,noreferrer')} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                                                    <button type="button" onClick={() => setPreviewDoc(doc)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20">
                                                         <ExternalLink size={16} />
                                                     </button>
                                                 </div>
@@ -430,6 +464,8 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                     )}
                 </div>
             </div>
+
+            {previewDoc && <PreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
         </div>
     );
 };

@@ -7,8 +7,9 @@ use App\Models\Vendor;
 use App\Models\VendorDocument;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail; // <--- ADDED
-use App\Mail\VendorStatusChange; // <--- ADDED
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use App\Mail\VendorStatusChange;
 
 class AdminVendorController extends Controller
 {
@@ -50,14 +51,9 @@ class AdminVendorController extends Controller
                     $filePath = $document->file_url;
 
                     // Remove leading /storage/ or storage/ if present
-                    if (strpos($filePath, '/storage/') === 0) {
-                        $filePath = substr($filePath, strlen('/storage/'));
-                    }
-                    if (strpos($filePath, 'storage/') === 0) {
-                        $filePath = substr($filePath, strlen('storage/'));
-                    }
+                    $filePath = preg_replace('/^\/?storage\//', '', $filePath);
 
-                    if (\Storage::disk('public')->exists($filePath)) {
+                    if (Storage::disk('public')->exists($filePath)) {
                         $fileContent = \Storage::disk('public')->get($filePath);
                         $base64 = base64_encode($fileContent);
                         $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;
@@ -89,14 +85,9 @@ class AdminVendorController extends Controller
                 $filePath = $document->file_url;
 
                 // Remove leading /storage/ or storage/ if present
-                if (strpos($filePath, '/storage/') === 0) {
-                    $filePath = substr($filePath, strlen('/storage/'));
-                }
-                if (strpos($filePath, 'storage/') === 0) {
-                    $filePath = substr($filePath, strlen('storage/'));
-                }
+                $filePath = preg_replace('/^\/?storage\//', '', $filePath);
 
-                if (\Storage::disk('public')->exists($filePath)) {
+                if (Storage::disk('public')->exists($filePath)) {
                     $fileContent = \Storage::disk('public')->get($filePath);
                     $base64 = base64_encode($fileContent);
                     $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;

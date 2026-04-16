@@ -84,8 +84,7 @@ const DocumentTypeBadge = React.memo(({ type }) => {
         </span>
     );
 });
-
-const VendorDetailRow = React.memo(({ vendor, index, showToast }) => {
+const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [vendorDetails, setVendorDetails] = useState(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
@@ -95,7 +94,53 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast }) => {
     const [rejectionReason, setRejectionReason] = useState('');
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectTarget, setRejectTarget] = useState(null);
-    const [previewDocument, setPreviewDocument] = useState(null);
+
+    const RejectModal = () => {
+        if (!showRejectModal) return null;
+
+        let title = "Reject Request";
+        if (rejectTarget?.type === 'vendor') title = "Reject Vendor Registration";
+        if (rejectTarget?.type === 'document') title = "Reject Verification Document";
+        if (rejectTarget?.type === 'service') title = "Reject Service Verification";
+
+        return (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+                <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                        <h3 className="font-bold text-slate-900">{title}</h3>
+                        <button onClick={() => setShowRejectModal(false)} className="text-slate-400 hover:text-slate-600">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="p-6">
+                        <p className="text-sm text-slate-600 mb-4 font-medium">Please provide a reason for this rejection. This will be visible to the vendor.</p>
+                        <textarea
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            className="w-full h-32 p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none resize-none transition-all"
+                            placeholder="Type rejection reason here..."
+                            required
+                        />
+                        <div className="flex gap-3 mt-6">
+                            <button 
+                                onClick={() => setShowRejectModal(false)}
+                                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={confirmReject}
+                                disabled={!rejectionReason.trim()}
+                                className="flex-1 px-4 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors shadow-lg shadow-red-500/20"
+                            >
+                                Confirm Rejection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const fetchVendorDetails = useCallback(async () => {
         if (vendorDetails || loadingDetails) return;
@@ -228,6 +273,7 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast }) => {
 
     return (
         <>
+            <RejectModal />
             <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={handleToggleExpand}>
                 <td className="px-6 py-4 text-center font-mono text-xs text-slate-400">{index}</td>
                 <td className="px-6 py-4">
@@ -320,6 +366,40 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast }) => {
                                     </div>
                                 </div>
 
+                                {/* General Documents Section */}
+                                {vendorDetails.documents?.filter(d => !d.service_id).length > 0 && (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2">
+                                            <FileText size={18} className="text-brand-600" />
+                                            <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">General Business Documents</h4>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            {vendorDetails.documents.filter(d => !d.service_id).map(doc => (
+                                                <div key={doc.id} className="flex flex-col gap-1">
+                                                    <div className="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-800 rounded-lg hover:border-brand-200 transition-colors bg-white dark:bg-slate-900 shadow-sm">
+                                                        <div className="flex items-center gap-3 overflow-hidden">
+                                                            <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded flex-shrink-0"><FileText size={16} className="text-slate-400" /></div>
+                                                            <div className="overflow-hidden">
+                                                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate" title={doc.document_name}>{doc.document_name}</p>
+                                                                <div className="flex items-center gap-2 mt-0.5">
+                                                                    <DocumentStatusBadge status={doc.verification_status} />
+                                                                    <span className="text-[9px] text-slate-400 uppercase">{doc.document_type.replace('_', ' ')}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 ml-2">
+                                                            <button onClick={() => onPreview(doc)} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors" title="View"><ExternalLink size={14} /></button>
+                                                            {doc.verification_status !== 'APPROVED' && <button onClick={() => handleDocumentReview(doc.id, 'APPROVED')} disabled={docReviewLoading === `${doc.id}-APPROVED`} className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-md transition-colors" title="Approve"><Check size={14} /></button>}
+                                                            {doc.verification_status !== 'REJECTED' && <button onClick={() => openRejectModal('document', doc.id)} disabled={docReviewLoading === `${doc.id}-REJECTED`} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors" title="Reject"><X size={14} /></button>}
+                                                        </div>
+                                                    </div>
+                                                    {doc.rejection_reason && <div className="px-3 py-1 bg-red-50/50 dark:bg-red-900/10 border-l-2 border-red-400 rounded-r-md"><p className="text-[10px] text-red-700 dark:text-red-400 font-medium italic">Reason: {doc.rejection_reason}</p></div>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Verification Sections ... */}
                                 {vendorDetails.services && vendorDetails.services.length > 0 && (
                                     <div className="space-y-6">
@@ -382,7 +462,7 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast }) => {
                                                                                     </div>
                                                                                 </div>
                                                                                 <div className="flex items-center gap-1 ml-2">
-                                                                                    <button onClick={() => setPreviewDocument(doc)} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors" title="View"><ExternalLink size={14} /></button>
+                                                                                    <button onClick={() => onPreview(doc)} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors" title="View"><ExternalLink size={14} /></button>
                                                                                     {doc.verification_status !== 'APPROVED' && <button onClick={() => handleDocumentReview(doc.id, 'APPROVED')} disabled={docReviewLoading === `${doc.id}-APPROVED`} className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-md transition-colors" title="Approve"><Check size={14} /></button>}
                                                                                     {doc.verification_status !== 'REJECTED' && <button onClick={() => openRejectModal('document', doc.id)} disabled={docReviewLoading === `${doc.id}-REJECTED`} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors" title="Reject"><X size={14} /></button>}
                                                                                 </div>
@@ -426,6 +506,40 @@ const AdminVendorsPage = () => {
         fetchVendors();
         setCurrentPage(1);
     }, [statusFilter, serviceTypeFilter, searchQuery]);
+
+    const [previewDoc, setPreviewDoc] = useState(null);
+
+    const PreviewModal = ({ doc, onClose }) => {
+        if (!doc) return null;
+        
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={onClose}>
+                <div className="flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                                <FileText size={20} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">{doc.document_name}</h3>
+                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{doc.document_type.replace('_', ' ')}</p>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-auto bg-slate-100 p-4 flex items-center justify-center">
+                        {doc.mime_type?.includes('pdf') ? (
+                            <iframe src={doc.file_url_full} title={doc.document_name} className="h-full w-full rounded-lg bg-white shadow-sm border-0" />
+                        ) : (
+                            <img src={doc.file_url_full} alt={doc.document_name} className="max-h-full max-w-full rounded-lg shadow-lg object-contain" />
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const fetchVendors = async () => {
         setLoading(true);
@@ -506,7 +620,7 @@ const AdminVendorsPage = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {loading ? <tr><td colSpan="7" className="px-6 py-12 text-center"><div className="flex items-center justify-center gap-2 text-slate-400"><Loader2 size={20} className="animate-spin" />Loading vendors...</div></td></tr> : vendors.length === 0 ? <tr><td colSpan="7" className="px-6 py-12 text-center"><div className="flex flex-col items-center gap-3 text-slate-400"><Store size={40} className="opacity-50" /><p>No vendors found.</p></div></td></tr> : paginatedVendors.map((vendor, idx) => (
-                                <VendorDetailRow key={vendor.id} vendor={vendor} index={(currentPage - 1) * itemsPerPage + idx + 1} showToast={showToast} />
+                                <VendorDetailRow key={vendor.id} vendor={vendor} index={(currentPage - 1) * itemsPerPage + idx + 1} showToast={showToast} onPreview={setPreviewDoc} />
                             ))}
                         </tbody>
                     </table>
@@ -521,6 +635,8 @@ const AdminVendorsPage = () => {
                     </div>
                 )}
             </div>
+
+            {previewDoc && <PreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
         </div>
     );
 };
