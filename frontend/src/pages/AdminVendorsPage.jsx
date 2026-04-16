@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../api/axios';
 import { 
     Store, Search, CheckCircle, XCircle, Ban, Check, 
@@ -6,7 +7,7 @@ import {
     ExternalLink, Loader2, AlertCircle, ArrowRight, X, Shield,
     Calendar, DollarSign, Clock, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { SkeletonTable, PageLoader } from '../components/SkeletonLoader';
+import { SkeletonTable, SkeletonCard, PageLoader } from '../components/SkeletonLoader';
 
 const formatCurrency = (amount) => {
     if (!amount) return 'TZS 0';
@@ -84,7 +85,7 @@ const DocumentTypeBadge = React.memo(({ type }) => {
         </span>
     );
 });
-const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview }) => {
+const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview, onActionSuccess }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [vendorDetails, setVendorDetails] = useState(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
@@ -103,9 +104,9 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview }) => 
         if (rejectTarget?.type === 'document') title = "Reject Verification Document";
         if (rejectTarget?.type === 'service') title = "Reject Service Verification";
 
-        return (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-                <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200">
+        return createPortal(
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => setShowRejectModal(false)}>
+                <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
                         <h3 className="font-bold text-slate-900">{title}</h3>
                         <button onClick={() => setShowRejectModal(false)} className="text-slate-400 hover:text-slate-600">
@@ -138,7 +139,8 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview }) => 
                         </div>
                     </div>
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 
@@ -169,7 +171,9 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview }) => 
             if (action === 'reject') vendor.status = 'INACTIVE';
             if (action === 'block') vendor.status = 'BLACKLISTED';
             if (action === 'unblock') vendor.status = 'ACTIVE';
+            
             showToast(res.data?.message || 'Vendor status updated.');
+            if (onActionSuccess) onActionSuccess();
             return true;
         } catch (error) {
             console.error(`Failed to ${action} vendor`, error);
@@ -204,6 +208,7 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview }) => 
                 setVendorDetails({ ...vendorDetails, documents: updatedDocs, services: updatedServices });
             }
             showToast(res.data?.message || 'Document review saved.');
+            if (onActionSuccess) onActionSuccess();
             return true;
         } catch (error) {
             console.error('Failed to review document', error);
@@ -237,6 +242,7 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview }) => 
                 setVendorDetails({ ...vendorDetails, services: updatedServices });
             }
             showToast(res.data?.message || 'Service review saved.');
+            if (onActionSuccess) onActionSuccess();
             return true;
         } catch (error) {
             console.error('Failed to review service', error);
@@ -492,6 +498,9 @@ const AdminVendorsPage = () => {
     const [vendors, setVendors] = useState([]);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState(null);
+    const [stats, setStats] = useState(null);
+    const [statsLoading, setStatsLoading] = useState(false);
+    
     const [statusFilter, setStatusFilter] = useState('');
     const [serviceTypeFilter, setServiceTypeFilter] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -500,12 +509,30 @@ const AdminVendorsPage = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
+    const showToast = useCallback((message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    }, []);
+
     const serviceTypes = ['CATERING', 'DECORATION', 'MC', 'PHOTOGRAPHY', 'VIDEOGRAPHY', 'SOUND', 'TRANSPORT', 'TENT_CHAIRS', 'CAKE', 'MAKEUP', 'SECURITY', 'VENUE', 'PRINTING', 'OTHER'];
     
     useEffect(() => {
         fetchVendors();
+        fetchStats();
         setCurrentPage(1);
     }, [statusFilter, serviceTypeFilter, searchQuery]);
+
+    const fetchStats = async () => {
+        setStatsLoading(true);
+        try {
+            const res = await api.get('/admin/vendors/stats');
+            setStats(res.data.data);
+        } catch (error) {
+            console.error('Failed to fetch stats', error);
+        } finally {
+            setStatsLoading(false);
+        }
+    };
 
     const [previewDoc, setPreviewDoc] = useState(null);
 
@@ -558,18 +585,24 @@ const AdminVendorsPage = () => {
         }
     };
 
-    const showToast = (message, type = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
-    };
-
-    const stats = useMemo(() => {
-        const total = vendors.length;
-        const pending = vendors.filter(v => v.status === 'PENDING_APPROVAL').length;
-        const active = vendors.filter(v => v.status === 'ACTIVE').length;
-        const blacklisted = vendors.filter(v => v.status === 'BLACKLISTED').length;
-        return { total, pending, active, blacklisted };
-    }, [vendors]);
+    const displayStats = useMemo(() => {
+        if (stats) return {
+            total: stats.vendors.total,
+            pending: stats.vendors.pending,
+            active: stats.vendors.active,
+            blacklisted: stats.vendors.blacklisted
+        };
+        
+        if (vendors.length > 0) {
+            return {
+                total: vendors.length,
+                pending: vendors.filter(v => v.status === 'PENDING_APPROVAL').length,
+                active: vendors.filter(v => v.status === 'ACTIVE').length,
+                blacklisted: vendors.filter(v => v.status === 'BLACKLISTED').length
+            };
+        }
+        return null;
+    }, [vendors, stats]);
 
     const paginatedVendors = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
@@ -582,20 +615,27 @@ const AdminVendorsPage = () => {
             <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                 <div><h2 className="text-2xl font-bold text-slate-900 dark:text-white">Vendor Management</h2><p className="text-slate-500 dark:text-slate-400">Manage vendor applications, approvals, and compliance.</p></div>
             </div>
+            
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                    { icon: <Store size={20} />, title: "Total Vendors", val: stats.total, color: "blue" },
-                    { icon: <Clock size={20} />, title: "Pending Approval", val: stats.pending, color: "amber" },
-                    { icon: <CheckCircle size={20} />, title: "Active Vendors", val: stats.active, color: "emerald" },
-                    { icon: <Ban size={20} />, title: "Blacklisted", val: stats.blacklisted, color: "red" }
-                ].map((item, idx) => (
-                    <div key={idx} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <div className="flex items-center gap-3">
-                            <div className={`p-3 bg-${item.color}-50 dark:bg-${item.color}-900/20 text-${item.color}-600 dark:text-${item.color}-400 rounded-lg`}>{item.icon}</div>
-                            <div><p className="text-sm text-slate-500 dark:text-slate-400">{item.title}</p><p className="text-xl font-bold text-slate-900 dark:text-white">{item.val}</p></div>
-                        </div>
-                    </div>
-                ))}
+                {!displayStats && statsLoading ? (
+                    <SkeletonCard count={4} />
+                ) : (
+                    <>
+                        {[
+                            { icon: <Store size={20} />, title: "Total Vendors", val: displayStats?.total || 0, color: "blue" },
+                            { icon: <Clock size={20} />, title: "Pending Approval", val: displayStats?.pending || 0, color: "amber" },
+                            { icon: <CheckCircle size={20} />, title: "Active Vendors", val: displayStats?.active || 0, color: "emerald" },
+                            { icon: <Ban size={20} />, title: "Blacklisted", val: displayStats?.blacklisted || 0, color: "red" }
+                        ].map((item, idx) => (
+                            <div key={idx} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-3 bg-${item.color}-50 dark:bg-${item.color}-900/20 text-${item.color}-600 dark:text-${item.color}-400 rounded-lg`}>{item.icon}</div>
+                                    <div><p className="text-sm text-slate-500 dark:text-slate-400">{item.title}</p><p className="text-xl font-bold text-slate-900 dark:text-white">{item.val}</p></div>
+                                </div>
+                            </div>
+                        ))}
+                    </>
+                )}
             </div>
             <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="flex flex-col md:flex-row gap-4">
@@ -620,7 +660,7 @@ const AdminVendorsPage = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {loading ? <tr><td colSpan="7" className="px-6 py-12 text-center"><div className="flex items-center justify-center gap-2 text-slate-400"><Loader2 size={20} className="animate-spin" />Loading vendors...</div></td></tr> : vendors.length === 0 ? <tr><td colSpan="7" className="px-6 py-12 text-center"><div className="flex flex-col items-center gap-3 text-slate-400"><Store size={40} className="opacity-50" /><p>No vendors found.</p></div></td></tr> : paginatedVendors.map((vendor, idx) => (
-                                <VendorDetailRow key={vendor.id} vendor={vendor} index={(currentPage - 1) * itemsPerPage + idx + 1} showToast={showToast} onPreview={setPreviewDoc} />
+                                <VendorDetailRow key={vendor.id} vendor={vendor} index={(currentPage - 1) * itemsPerPage + idx + 1} showToast={showToast} onPreview={setPreviewDoc} onActionSuccess={fetchStats} />
                             ))}
                         </tbody>
                     </table>

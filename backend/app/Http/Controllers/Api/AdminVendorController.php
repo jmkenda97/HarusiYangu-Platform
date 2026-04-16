@@ -10,9 +10,41 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use App\Mail\VendorStatusChange;
+use App\Services\NotificationService;
 
 class AdminVendorController extends Controller
 {
+    public function stats()
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('SUPER_ADMIN') && !$user->hasRole('ADMIN')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'vendors' => [
+                    'total' => Vendor::count(),
+                    'active' => Vendor::where('status', 'ACTIVE')->count(),
+                    'pending' => Vendor::where('status', 'PENDING_APPROVAL')->count(),
+                    'blacklisted' => Vendor::where('status', 'BLACKLISTED')->count(),
+                ],
+                'services' => [
+                    'total' => \App\Models\VendorService::count(),
+                    'verified' => \App\Models\VendorService::where('is_verified', true)->count(),
+                    'pending' => \App\Models\VendorService::where('is_verified', false)->count(),
+                ],
+                'documents' => [
+                    'total' => VendorDocument::count(),
+                    'approved' => VendorDocument::where('verification_status', 'APPROVED')->count(),
+                    'pending' => VendorDocument::where('verification_status', 'PENDING')->count(),
+                    'rejected' => VendorDocument::where('verification_status', 'REJECTED')->count(),
+                ]
+            ]
+        ]);
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -118,9 +150,14 @@ class AdminVendorController extends Controller
 
             $vendor->update(['status' => 'ACTIVE']);
 
-            // SEND APPROVAL EMAIL
-            if ($vendor->user && $vendor->user->email) {
-                Mail::to($vendor->user->email)->send(new VendorStatusChange($vendor, 'ACTIVE'));
+            // SEND NOTIFICATION
+            if ($vendor->user) {
+                NotificationService::notify(
+                    $vendor->user,
+                    'Vendor Account Approved!',
+                    "Congratulations! Your vendor profile '{$vendor->business_name}' has been approved. You can now start managing your services and receiving inquiries.",
+                    ['vendor_id' => $vendor->id, 'status' => 'ACTIVE']
+                );
             }
 
             return response()->json(['success' => true, 'message' => 'Vendor approved successfully.', 'data' => $vendor]);
@@ -149,9 +186,14 @@ class AdminVendorController extends Controller
                 'notes' => ($vendor->notes ? $vendor->notes . "\n" : '') . 'Rejection Reason: ' . $reason
             ]);
 
-            // SEND REJECTION EMAIL
-            if ($vendor->user && $vendor->user->email) {
-                Mail::to($vendor->user->email)->send(new VendorStatusChange($vendor, 'INACTIVE', $reason));
+            // SEND NOTIFICATION
+            if ($vendor->user) {
+                NotificationService::notify(
+                    $vendor->user,
+                    'Vendor Account Update Required',
+                    "Your vendor registration for '{$vendor->business_name}' requires updates before it can be approved.\n\nReason: {$reason}\n\nPlease log in to your dashboard to make the necessary changes.",
+                    ['vendor_id' => $vendor->id, 'status' => 'INACTIVE', 'rejection_reason' => $reason]
+                );
             }
 
             return response()->json(['success' => true, 'message' => 'Vendor rejected successfully.', 'data' => $vendor]);
@@ -244,6 +286,16 @@ class AdminVendorController extends Controller
                 'rejection_reason' => $request->rejection_reason
             ]);
 
+            // NOTIFY VENDOR
+            if ($service->vendor && $service->vendor->user) {
+                NotificationService::notify(
+                    $service->vendor->user,
+                    'Service Verification Rejected',
+                    "Verification for your service '{$service->service_name}' was rejected.\n\nReason: {$request->rejection_reason}\n\nPlease update the service or provide better documentation.",
+                    ['service_id' => $service->id, 'vendor_id' => $vendorId]
+                );
+            }
+
             return response()->json(['success' => true, 'message' => 'Service rejected.', 'data' => $service]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to reject service.'], 500);
@@ -286,6 +338,16 @@ class AdminVendorController extends Controller
                     'is_available' => false,
                     'verified_at' => null,
                 ]);
+            }
+
+            // NOTIFY VENDOR ON REJECTION
+            if ($request->status === 'REJECTED' && $document->vendor && $document->vendor->user) {
+                NotificationService::notify(
+                    $document->vendor->user,
+                    'Document Verification Rejected',
+                    "Your document '{$document->document_name}' was rejected during verification.\n\nReason: {$request->rejection_reason}\n\nPlease upload a valid document to proceed.",
+                    ['document_id' => $document->id, 'vendor_id' => $vendorId]
+                );
             }
 
             return response()->json(['success' => true, 'message' => 'Document reviewed successfully.', 'data' => $document]);

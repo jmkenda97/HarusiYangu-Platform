@@ -122,6 +122,7 @@ Route::prefix('v1')->group(function () {
         // ADMIN VENDOR MANAGEMENT ROUTES
         // ==========================================
         Route::prefix('admin/vendors')->group(function () {
+            Route::get('/stats', [AdminVendorController::class, 'stats']);
             Route::get('/', [AdminVendorController::class, 'index']);
             Route::get('/{id}', [AdminVendorController::class, 'show']);
             Route::put('/{id}/approve', [AdminVendorController::class, 'approve']);

@@ -15,6 +15,7 @@ const DashboardPage = () => {
   const [users, setUsers] = useState([]);     // For Admin: List of Hosts
   const [events, setEvents] = useState([]);     // For Everyone: List of Events
   const [vendorDashboard, setVendorDashboard] = useState(null);
+  const [vendorStats, setVendorStats] = useState(null);
 
   // Fetch Data
   useEffect(() => {
@@ -33,6 +34,16 @@ const DashboardPage = () => {
         // 1. Fetch Users
         const usersRes = await api.get('/users');
         setUsers(usersRes.data.data || []);
+
+        // --- FETCH VENDOR STATS FOR ADMIN ---
+        if (user?.role === 'SUPER_ADMIN') {
+          try {
+            const vStatsRes = await api.get('/admin/vendors/stats');
+            setVendorStats(vStatsRes.data.data);
+          } catch (vErr) {
+            console.error("Failed to fetch vendor stats", vErr);
+          }
+        }
 
         // 2. Fetch Events List
         const eventsRes = await api.get('/events');
@@ -206,33 +217,48 @@ const DashboardPage = () => {
         {user?.role === 'SUPER_ADMIN' && (
           <div className="space-y-6">
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase">Registered Hosts</h3>
-                  <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Users size={20}/></div>
-                </div>
-                <p className="text-3xl font-bold text-slate-900">{users.length}</p>
-                <p className="text-xs text-slate-400 mt-2">Active Accounts</p>
-              </div>
-              
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase">Total Events</h3>
-                  <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Activity size={20}/></div>
-                </div>
-                <p className="text-3xl font-bold text-slate-900">{events.length}</p>
-                <p className="text-xs text-slate-400 mt-2">Scheduled Events</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {loading ? (
+                <SkeletonCard count={4} />
+              ) : (
+                <>
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Registered Hosts</h3>
+                      <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Users size={20}/></div>
+                    </div>
+                    <p className="text-3xl font-bold text-slate-900">{users.length}</p>
+                    <p className="text-xs text-slate-400 mt-2">Active Accounts</p>
+                  </div>
 
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase">Total Collected</h3>
-                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Wallet size={20}/></div>
-                </div>
-                <p className="text-3xl font-bold text-emerald-600">{formatCurrency(stats.totalCollected)}</p>
-                <p className="text-xs text-slate-400 mt-2">Platform-wide Contributions</p>
-              </div>
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total Vendors</h3>
+                      <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Briefcase size={20}/></div>
+                    </div>
+                    <p className="text-3xl font-bold text-slate-900">{vendorStats?.vendors?.total || 0}</p>
+                    <p className="text-xs text-slate-400 mt-2">{vendorStats?.vendors?.pending || 0} Pending Verification</p>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Scheduled Events</h3>
+                      <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Activity size={20}/></div>
+                    </div>
+                    <p className="text-3xl font-bold text-slate-900">{events.length}</p>
+                    <p className="text-xs text-slate-400 mt-2">Active Across Platform</p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total Collected</h3>
+                      <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Wallet size={20}/></div>
+                    </div>
+                    <p className="text-3xl font-bold text-emerald-600">{formatCurrency(stats.totalCollected)}</p>
+                    <p className="text-xs text-slate-400 mt-2">Platform-wide Contributions</p>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

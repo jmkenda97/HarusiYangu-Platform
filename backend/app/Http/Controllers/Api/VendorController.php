@@ -196,6 +196,7 @@ class VendorController extends Controller
                     'status' => $vendor->status,
                     'verification_status' => $vendor->status,
                     'rating' => $vendor->rating,
+                    'notes' => $vendor->notes,
                 ],
                 'services' => $vendor->services,
                 'documents' => $vendor->documents,

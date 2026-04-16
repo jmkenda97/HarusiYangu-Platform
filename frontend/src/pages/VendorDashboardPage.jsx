@@ -241,6 +241,21 @@ const VendorDashboardPage = () => {
 
     const { profile, services, documents, events, inquiries, financials } = dashboardData;
 
+    const rejectionItems = useMemo(() => {
+        const items = [];
+        if (profile?.status === 'INACTIVE' && profile?.notes?.includes('Rejection Reason:')) {
+            const reason = profile.notes.split('Rejection Reason:').pop().trim();
+            items.push({ type: 'Account', name: profile.business_name, reason });
+        }
+        documents?.filter(d => d.verification_status === 'REJECTED').forEach(d => {
+            items.push({ type: 'Document', name: d.document_name, reason: d.rejection_reason });
+        });
+        services?.filter(s => s.rejection_reason).forEach(s => {
+            items.push({ type: 'Service', name: s.service_name, reason: s.rejection_reason });
+        });
+        return items;
+    }, [profile, services, documents]);
+
     return (
         <div className="space-y-6">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -258,6 +273,39 @@ const VendorDashboardPage = () => {
                     </div>
                 )}
             </div>
+
+            {/* Verification Alert Section */}
+            {rejectionItems.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-5">
+                    <div className="flex items-start gap-4">
+                        <div className="p-2 bg-red-100 dark:bg-red-800 text-red-600 dark:text-red-200 rounded-lg">
+                            <AlertCircle size={24} />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="font-bold text-red-900 dark:text-red-100">Verification Issues Found</h3>
+                            <p className="text-sm text-red-700 dark:text-red-300 mb-4">Some of your items were rejected by the admin. Please fix them to get your account fully verified.</p>
+                            
+                            <div className="space-y-3">
+                                {rejectionItems.map((item, idx) => (
+                                    <div key={idx} className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-lg border border-red-100 dark:border-red-900/50 flex justify-between items-center gap-4">
+                                        <div>
+                                            <p className="text-xs font-black uppercase text-red-400 tracking-widest">{item.type}</p>
+                                            <p className="text-sm font-bold text-slate-900 dark:text-white">{item.name}</p>
+                                            <p className="text-xs text-red-600 dark:text-red-400 mt-1 italic">Reason: {item.reason}</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => window.location.href = '/vendor-profile'}
+                                            className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
+                                        >
+                                            Fix Issue
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
