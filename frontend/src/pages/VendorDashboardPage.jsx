@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import {
     Building2, Package, FileText, Calendar, DollarSign, ArrowRight,
@@ -42,7 +43,7 @@ const StatCard = React.memo(({ label, value, icon: Icon, color, subtext, isCurre
 const StatusBadge = React.memo(({ status }) => {
     const styles = {
         PENDING_APPROVAL: 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
-        ACTIVE: 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
+        ACTIVE: 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-yellow-800',
         INACTIVE: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
         BLACKLISTED: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
     };
@@ -127,6 +128,7 @@ const QuoteModal = ({ inquiry, onClose, onSuccess }) => {
 };
 
 const VendorDashboardPage = () => {
+    const navigate = useNavigate();
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [dashboardData, setDashboardData] = useState(null);
@@ -192,6 +194,7 @@ const VendorDashboardPage = () => {
         const { profile, services, documents } = dashboardData;
         const items = [];
         
+        // 1. Account Rejection
         if (profile?.status === 'INACTIVE' && profile?.notes) {
             const lines = profile.notes.split('\n');
             const reasonLine = lines.find(line => line.includes('Rejection Reason:'));
@@ -201,10 +204,12 @@ const VendorDashboardPage = () => {
             }
         }
 
+        // 2. Document Rejections
         documents?.filter(d => d.verification_status === 'REJECTED').forEach(d => {
             items.push({ type: 'Document', name: d.document_name, reason: d.rejection_reason || 'No specific reason provided' });
         });
 
+        // 3. Service Rejections
         services?.filter(s => s.rejection_reason).forEach(s => {
             items.push({ type: 'Service', name: s.service_name, reason: s.rejection_reason });
         });
@@ -264,35 +269,6 @@ const VendorDashboardPage = () => {
         );
     }
 
-    const { profile, services, documents, events, inquiries, financials } = dashboardData;
-
-    const rejectionItems = useMemo(() => {
-        const items = [];
-        
-        // 1. Account Rejection
-        if (profile?.status === 'INACTIVE' && profile?.notes) {
-            // More robust extraction of rejection reason from notes
-            const lines = profile.notes.split('\n');
-            const reasonLine = lines.find(line => line.includes('Rejection Reason:'));
-            if (reasonLine) {
-                const reason = reasonLine.split('Rejection Reason:').pop().trim();
-                items.push({ type: 'Account', name: profile.business_name || 'Your Profile', reason });
-            }
-        }
-
-        // 2. Document Rejections
-        documents?.filter(d => d.verification_status === 'REJECTED').forEach(d => {
-            items.push({ type: 'Document', name: d.document_name, reason: d.rejection_reason || 'No specific reason provided' });
-        });
-
-        // 3. Service Rejections
-        services?.filter(s => s.rejection_reason).forEach(s => {
-            items.push({ type: 'Service', name: s.service_name, reason: s.rejection_reason });
-        });
-
-        return items;
-    }, [profile, services, documents]);
-
     return (
         <div className="space-y-6">
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -331,7 +307,10 @@ const VendorDashboardPage = () => {
                                             <p className="text-xs text-red-600 dark:text-red-400 mt-1 italic">Reason: {item.reason}</p>
                                         </div>
                                         <button 
-                                            onClick={() => window.location.href = '/vendor-profile'}
+                                            onClick={() => {
+                                                const tab = item.type === 'Document' ? 'documents' : item.type === 'Service' ? 'services' : 'profile';
+                                                navigate(`/vendor/profile?tab=${tab}`);
+                                            }}
                                             className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
                                         >
                                             Fix Issue
@@ -369,11 +348,11 @@ const VendorDashboardPage = () => {
                         <p className="text-xs text-slate-500 mt-0.5">Respond to hosts interested in your services</p>
                     </div>
                     <span className="px-3 py-1 bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 rounded-full text-xs font-bold">
-                        {inquiries?.length || 0} Total
+                        {dashboardData?.inquiries?.length || 0} Total
                     </span>
                 </div>
                 <div className="overflow-x-auto">
-                    {inquiries?.length === 0 ? (
+                    {dashboardData?.inquiries?.length === 0 ? (
                         <div className="p-16 text-center">
                             <MessageSquare className="w-12 h-12 text-slate-200 dark:text-slate-700 mx-auto mb-4" />
                             <p className="text-slate-500 dark:text-slate-400 font-medium">No inquiries received yet.</p>
@@ -436,8 +415,8 @@ const VendorDashboardPage = () => {
                                     ))}
                                 </tbody>
                             </table>
-                            {inquiries.length > itemsPerPage && (
-                                <PaginationFooter total={inquiries.length} currentPage={inquiryPage} onPageChange={setInquiryPage} itemsPerPage={itemsPerPage} />
+                            {dashboardData?.inquiries?.length > itemsPerPage && (
+                                <PaginationFooter total={dashboardData.inquiries.length} currentPage={inquiryPage} onPageChange={setInquiryPage} itemsPerPage={itemsPerPage} />
                             )}
                         </>
                     )}
@@ -453,7 +432,7 @@ const VendorDashboardPage = () => {
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                    {events?.length === 0 ? (
+                    {dashboardData?.events?.length === 0 ? (
                         <div className="p-16 text-center">
                             <Calendar className="w-12 h-12 text-slate-200 dark:text-slate-700 mx-auto mb-4" />
                             <p className="text-slate-500 dark:text-slate-400 font-medium">No confirmed events yet.</p>
@@ -489,8 +468,8 @@ const VendorDashboardPage = () => {
                                     ))}
                                 </tbody>
                             </table>
-                            {events.length > itemsPerPage && (
-                                <PaginationFooter total={events.length} currentPage={bookingPage} onPageChange={setBookingPage} itemsPerPage={itemsPerPage} />
+                            {dashboardData?.events?.length > itemsPerPage && (
+                                <PaginationFooter total={dashboardData.events.length} currentPage={bookingPage} onPageChange={setBookingPage} itemsPerPage={itemsPerPage} />
                             )}
                         </>
                     )}

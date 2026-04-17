@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, MailOpen, Clock, MessageSquare, DollarSign, CheckCircle, AlertCircle } from 'lucide-react';
+import { Bell, Check, Clock, MessageSquare, DollarSign, CheckCircle, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
 const NotificationBell = () => {
+    const navigate = useNavigate();
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
     const dropdownRef = useRef(null);
 
     useEffect(() => {
@@ -28,10 +29,29 @@ const NotificationBell = () => {
     const fetchNotifications = async () => {
         try {
             const res = await api.get('/notifications');
-            setNotifications(res.data.data);
-            setUnreadCount(res.data.unread_count);
+            setNotifications(res.data.data || []);
+            setUnreadCount(res.data.unread_count || 0);
         } catch (error) {
             console.error('Failed to fetch notifications', error);
+        }
+    };
+
+    const handleNotificationClick = async (notif) => {
+        // 1. Mark as read on the backend if not already read
+        if (!notif.read_at) {
+            try {
+                await api.put(`/notifications/${notif.id}/read`);
+                setUnreadCount(prev => Math.max(0, prev - 1));
+                setNotifications(notifications.map(n => n.id === notif.id ? { ...n, read_at: new Date().toISOString() } : n));
+            } catch (error) {
+                console.error('Failed to mark as read', error);
+            }
+        }
+
+        // 2. Navigate to the link if it exists
+        if (notif.data?.link) {
+            navigate(notif.data.link);
+            setIsOpen(false);
         }
     };
 
@@ -100,25 +120,19 @@ const NotificationBell = () => {
                                 <div 
                                     key={notif.id}
                                     className={`p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer relative group ${!notif.read_at ? 'bg-brand-50/20 dark:bg-brand-900/10' : ''}`}
-                                    onClick={() => !notif.read_at && markAsRead(notif.id)}
+                                    onClick={() => handleNotificationClick(notif)}
                                 >
                                     <div className="flex gap-3">
                                         <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${!notif.read_at ? 'bg-white dark:bg-slate-800 shadow-sm' : 'bg-slate-100 dark:bg-slate-900'}`}>
-                                            {getIcon(notif.data.icon)}
+                                            {getIcon(notif.data?.icon)}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className={`text-sm ${!notif.read_at ? 'font-bold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>
-                                                {notif.data.subject}
+                                                {notif.data?.subject || 'Notification'}
                                             </p>
                                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
-                                                {notif.data.content}
+                                                {notif.data?.content || 'Click to view details'}
                                             </p>
-                                            <div className="flex items-center gap-2 mt-2">
-                                                <Clock size={10} className="text-slate-400" />
-                                                <span className="text-[10px] text-slate-400 uppercase font-medium">
-                                                    {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                            </div>
                                         </div>
                                         {!notif.read_at && (
                                             <div className="h-2 w-2 rounded-full bg-brand-500 mt-1.5 flex-shrink-0" />
@@ -142,7 +156,10 @@ const NotificationBell = () => {
                     </div>
 
                     <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                        <button className="w-full text-center text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium py-1">
+                        <button 
+                            onClick={() => { navigate('/notifications'); setIsOpen(false); }}
+                            className="w-full text-center text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium py-1"
+                        >
                             View all activity
                         </button>
                     </div>

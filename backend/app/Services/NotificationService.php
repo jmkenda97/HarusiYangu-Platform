@@ -6,7 +6,7 @@ use App\Models\MessageLog;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
-use App\Notifications\SystemNotification; // We'll create this next
+use App\Notifications\GenericNotification;
 use Illuminate\Support\Facades\Log;
 
 class NotificationService
@@ -14,26 +14,50 @@ class NotificationService
     /**
      * Send a notification through multiple channels and log it.
      */
-    public static function notify(User $receiver, string $subject, string $content, array $data = [], User $sender = null)
+    public static function notify(User $receiver, string $subject, string $content, array $data = [])
     {
         try {
+            $sender = auth()->user();
+
+            // Auto-determine link if not provided
+            if (!isset($data['link'])) {
+                $sub = strtolower($subject);
+                $msg = strtolower($content);
+                
+                if (str_contains($sub, 'service') || str_contains($msg, 'service')) {
+                    $data['link'] = '/vendor/profile?tab=services';
+                } elseif (str_contains($sub, 'document') || str_contains($msg, 'document')) {
+                    $data['link'] = '/vendor/profile?tab=documents';
+                } elseif (str_contains($sub, 'account') || str_contains($sub, 'vendor') || str_contains($msg, 'registration')) {
+                    if ($receiver->hasRole('VENDOR')) {
+                        $data['link'] = '/vendor/dashboard';
+                    } else {
+                        $data['link'] = '/admin/vendors';
+                    }
+                }
+            }
+
             // 1. In-App Notification (Database)
             // This will show up in the "Bell" on the frontend
-            $receiver->notify(new \App\Notifications\GenericNotification($subject, $content, $data));
+            $receiver->notify(new GenericNotification($subject, $content, $data));
 
             // 2. Email Notification
             if ($receiver->email) {
-                Mail::raw($content, function ($message) use ($receiver, $subject) {
-                    $message->to($receiver->email)
-                            ->subject($subject);
-                });
+                try {
+                    Mail::raw($content, function ($message) use ($receiver, $subject) {
+                        $message->to($receiver->email)
+                                ->subject($subject);
+                    });
+                } catch (\Exception $e) {
+                    Log::error('Mail sending failed: ' . $e->getMessage());
+                }
             }
 
             // 3. Log the message for future SMS/WhatsApp integration
             MessageLog::create([
                 'sender_id' => $sender ? $sender->id : null,
                 'receiver_id' => $receiver->id,
-                'type' => 'EMAIL', // Current primary channel
+                'type' => 'EMAIL', 
                 'recipient' => $receiver->email,
                 'subject' => $subject,
                 'content' => $content,

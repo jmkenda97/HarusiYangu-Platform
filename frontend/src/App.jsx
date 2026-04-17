@@ -19,6 +19,7 @@ const VendorCatalogPage = React.lazy(() => import('./pages/VendorCatalogPage'));
 const VendorProfilePage = React.lazy(() => import('./pages/VendorProfilePage'));
 const VendorDashboardPage = React.lazy(() => import('./pages/VendorDashboardPage'));
 const AdminVendorsPage = React.lazy(() => import('./pages/AdminVendorsPage'));
+const NotificationsPage = React.lazy(() => import('./pages/NotificationsPage'));
 
 // ============================================================
 // SMART REDIRECT COMPONENT (THE FIX)
@@ -69,6 +70,13 @@ function App() {
                   <DashboardPage />
                 </Suspense>
               } />
+
+              {/* --- NOTIFICATIONS --- */}
+              <Route path="/notifications" element={
+                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Notifications...</div>}>
+                  <NotificationsPage />
+                </Suspense>
+              } />
               
               {/* --- HOST PAGES --- */}
               <Route path="/users" element={
@@ -81,6 +89,8 @@ function App() {
                   <ProfilePage />
                 </Suspense>
               } />
+
+              
               <Route path="events" element={
                 <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Events...</div>}>
                   <EventsPage />
