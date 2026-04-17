@@ -89,6 +89,13 @@ class VendorServiceController extends Controller
                 }]);
             });
 
+            // NOTIFY ADMINS
+            \App\Services\NotificationService::notifyAdmins(
+                'New Service Verification Required',
+                "Vendor '{$vendor->business_name}' has added a new service '{$service->service_name}' that needs verification.",
+                ['vendor_id' => $vendor->id, 'service_id' => $service->id, 'action' => 'review_required']
+            );
+
             return response()->json([
                 'success' => true,
                 'message' => 'Service created successfully. Please wait for admin verification.',

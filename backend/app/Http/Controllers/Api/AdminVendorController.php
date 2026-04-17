@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Vendor;
 use App\Models\VendorDocument;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use App\Mail\VendorStatusChange;
 use App\Services\NotificationService;
 
@@ -59,7 +61,10 @@ class AdminVendorController extends Controller
         if ($request->has('search') && $request->search) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('business_name', 'like', "%{$search}%")->orWhere('full_name', 'like', "%{$search}%");
+                $q->where('business_name', 'ilike', "%{$search}%")
+                  ->orWhere('full_name', 'ilike', "%{$search}%")
+                  ->orWhere('phone', 'ilike', "%{$search}%")
+                  ->orWhere('email', 'ilike', "%{$search}%");
             });
         }
 
@@ -76,26 +81,9 @@ class AdminVendorController extends Controller
             $vendor->pending_documents_count = $vendor->documents->where('verification_status', 'PENDING')->count();
             $vendor->approved_documents_count = $vendor->documents->where('verification_status', 'APPROVED')->count();
             $vendor->rejected_documents_count = $vendor->documents->where('verification_status', 'REJECTED')->count();
-
-            // Add base64 data URI to each document for browser display
-            $vendor->documents->each(function ($document) {
-                try {
-                    $filePath = $document->file_url;
-
-                    // Remove leading /storage/ or storage/ if present
-                    $filePath = preg_replace('/^\/?storage\//', '', $filePath);
-
-                    if (Storage::disk('public')->exists($filePath)) {
-                        $fileContent = \Storage::disk('public')->get($filePath);
-                        $base64 = base64_encode($fileContent);
-                        $document->file_url_full = 'data:' . $document->mime_type . ';base64,' . $base64;
-                    } else {
-                        $document->file_url_full = null;
-                    }
-                } catch (\Exception $e) {
-                    $document->file_url_full = null;
-                }
-            });
+            
+            // Speed Optimization: Removed base64 processing from list view. 
+            // Previews will be handled by the 'show' method when a vendor is expanded.
         });
 
         return response()->json(['success' => true, 'data' => $vendors]);
@@ -132,6 +120,39 @@ class AdminVendorController extends Controller
         });
 
         return response()->json(['success' => true, 'data' => $vendor]);
+    }
+
+    public function destroy($id)
+    {
+        $user = auth()->user();
+        if (!$user->hasRole('SUPER_ADMIN')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Super Admin access required.'], 403);
+        }
+
+        try {
+            $vendor = Vendor::with('user')->find($id);
+            if (!$vendor) return response()->json(['success' => false, 'message' => 'Vendor not found.'], 404);
+
+            $associatedUser = $vendor->user;
+
+            DB::transaction(function () use ($vendor, $associatedUser) {
+                // Soft delete the vendor
+                $vendor->delete();
+                
+                // Soft delete the user so they can't login normally
+                if ($associatedUser) {
+                    $associatedUser->delete();
+                }
+            });
+
+            return response()->json([
+                'success' => true, 
+                'message' => 'Vendor and associated user account have been soft-deleted.'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Vendor Deletion Failed: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to delete vendor.'], 500);
+        }
     }
 
     public function approve($id)
@@ -259,6 +280,16 @@ class AdminVendorController extends Controller
                 'verified_at' => now(),
                 'rejection_reason' => null
             ]);
+
+            // NOTIFY VENDOR
+            if ($service->vendor && $service->vendor->user) {
+                NotificationService::notify(
+                    $service->vendor->user,
+                    'Service Verified & Live!',
+                    "Your service '{$service->service_name}' has been verified and is now live on the platform catalog for hosts to book.",
+                    ['service_id' => $service->id, 'vendor_id' => $vendorId, 'icon' => 'CheckCircle']
+                );
+            }
 
             return response()->json(['success' => true, 'message' => 'Service approved and activated.', 'data' => $service]);
         } catch (\Exception $e) {

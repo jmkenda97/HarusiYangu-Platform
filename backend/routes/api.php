@@ -125,6 +125,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/stats', [AdminVendorController::class, 'stats']);
             Route::get('/', [AdminVendorController::class, 'index']);
             Route::get('/{id}', [AdminVendorController::class, 'show']);
+            Route::delete('/{id}', [AdminVendorController::class, 'destroy']);
             Route::put('/{id}/approve', [AdminVendorController::class, 'approve']);
             Route::put('/{id}/reject', [AdminVendorController::class, 'reject']);
             Route::put('/{id}/block', [AdminVendorController::class, 'block']);

@@ -187,6 +187,31 @@ const VendorDashboardPage = () => {
         return dashboardData.events.slice(start, start + itemsPerPage);
     }, [dashboardData, bookingPage]);
 
+    const rejectionItems = useMemo(() => {
+        if (!dashboardData) return [];
+        const { profile, services, documents } = dashboardData;
+        const items = [];
+        
+        if (profile?.status === 'INACTIVE' && profile?.notes) {
+            const lines = profile.notes.split('\n');
+            const reasonLine = lines.find(line => line.includes('Rejection Reason:'));
+            if (reasonLine) {
+                const reason = reasonLine.split('Rejection Reason:').pop().trim();
+                items.push({ type: 'Account', name: profile.business_name || 'Your Profile', reason });
+            }
+        }
+
+        documents?.filter(d => d.verification_status === 'REJECTED').forEach(d => {
+            items.push({ type: 'Document', name: d.document_name, reason: d.rejection_reason || 'No specific reason provided' });
+        });
+
+        services?.filter(s => s.rejection_reason).forEach(s => {
+            items.push({ type: 'Service', name: s.service_name, reason: s.rejection_reason });
+        });
+
+        return items;
+    }, [dashboardData]);
+
     if (loading) {
         return (
             <div className="space-y-6">
@@ -243,16 +268,28 @@ const VendorDashboardPage = () => {
 
     const rejectionItems = useMemo(() => {
         const items = [];
-        if (profile?.status === 'INACTIVE' && profile?.notes?.includes('Rejection Reason:')) {
-            const reason = profile.notes.split('Rejection Reason:').pop().trim();
-            items.push({ type: 'Account', name: profile.business_name, reason });
+        
+        // 1. Account Rejection
+        if (profile?.status === 'INACTIVE' && profile?.notes) {
+            // More robust extraction of rejection reason from notes
+            const lines = profile.notes.split('\n');
+            const reasonLine = lines.find(line => line.includes('Rejection Reason:'));
+            if (reasonLine) {
+                const reason = reasonLine.split('Rejection Reason:').pop().trim();
+                items.push({ type: 'Account', name: profile.business_name || 'Your Profile', reason });
+            }
         }
+
+        // 2. Document Rejections
         documents?.filter(d => d.verification_status === 'REJECTED').forEach(d => {
-            items.push({ type: 'Document', name: d.document_name, reason: d.rejection_reason });
+            items.push({ type: 'Document', name: d.document_name, reason: d.rejection_reason || 'No specific reason provided' });
         });
+
+        // 3. Service Rejections
         services?.filter(s => s.rejection_reason).forEach(s => {
             items.push({ type: 'Service', name: s.service_name, reason: s.rejection_reason });
         });
+
         return items;
     }, [profile, services, documents]);
 

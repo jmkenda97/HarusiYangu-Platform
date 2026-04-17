@@ -24,6 +24,16 @@ class AuthController extends Controller
         ]);
 
         $phone = $this->normalizePhone($request->phone);
+
+        // Check if user is soft-deleted
+        $user = User::withTrashed()->where('phone', $phone)->first();
+        if ($user && $user->trashed()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account has been deactivated. Please contact administration for assistance.'
+            ], 403);
+        }
+
         $otp = rand(100000, 999999);
 
         // Use an updateOrCreate to prevent flooding the table
@@ -97,8 +107,16 @@ class AuthController extends Controller
 
         $phone = $this->normalizePhone($request->phone);
 
+        // Check if user is soft-deleted
+        $user = User::withTrashed()->where('phone', $phone)->first();
+        if ($user && $user->trashed()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account has been deactivated. Please contact administration for assistance.'
+            ], 403);
+        }
+
         // Check if user already exists
-        $user = User::where('phone', $phone)->first();
         if ($user) {
             return response()->json(['success' => false, 'message' => 'User already exists. Please login.'], 422);
         }
@@ -264,6 +282,13 @@ class AuthController extends Controller
                             \Log::error('Mail sending failed: ' . $e->getMessage());
                         }
                     }
+
+                    // NOTIFY ADMINS
+                    \App\Services\NotificationService::notifyAdmins(
+                        'New Vendor Registered',
+                        "A new vendor '{$vendor->business_name}' has completed registration and is awaiting document review.",
+                        ['vendor_id' => $vendor->id, 'action' => 'review_required']
+                    );
                 }
 
                 $token = $user->createToken('auth_token')->plainTextToken;

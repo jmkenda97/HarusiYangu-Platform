@@ -3,16 +3,18 @@ import { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { 
   LayoutDashboard, CreditCard, Users, Plus, Activity, 
-  TrendingUp, Server, Calendar, ArrowRight, Phone, 
-  CheckCircle, Clock, MapPin, Wallet, Calculator, ScanLine,
-  UserCheck, Settings, Briefcase, FileText, Loader2, Shield
+  TrendingUp, Server, Calendar, ArrowRight, Wallet, 
+  Clock, CheckCircle, Briefcase, Shield, Settings, UserCheck, X
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { SkeletonCard } from '../components/SkeletonLoader';
 
 const DashboardPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [myEvents, setMyEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-  const [users, setUsers] = useState([]);     // For Admin: List of Hosts
   const [events, setEvents] = useState([]);     // For Everyone: List of Events
   const [vendorDashboard, setVendorDashboard] = useState(null);
   const [vendorStats, setVendorStats] = useState(null);
@@ -50,52 +52,48 @@ const DashboardPage = () => {
         const basicEvents = eventsRes.data.data || [];
 
         if (basicEvents.length === 0) {
-            setEvents([]);
-            setLoading(false);
-            return;
+          setMyEvents([]);
+          setEvents([]);
+        } else {
+          // 3. Fetch Full Details for each event to get contribution totals
+          const fullEvents = await Promise.all(
+            basicEvents.map(async (e) => {
+              try {
+                const detailRes = await api.get(`/events/${e.id}`);
+                return detailRes.data.data;
+              } catch (err) {
+                return e;
+              }
+            })
+          );
+          setMyEvents(fullEvents);
+          setEvents(fullEvents);
         }
-
-        // 3. Fetch Details for accurate numbers
-        setLoadingDetails(true);
-        
-        const detailPromises = basicEvents.map(event => api.get(`/events/${event.id}`));
-        const detailResponses = await Promise.all(detailPromises);
-        
-        const enrichedEvents = detailResponses.map(res => res.data.data);
-        setEvents(enrichedEvents);
-        
-        setLoadingDetails(false);
-
       } catch (error) {
-        console.error("Failed to load dashboard data", error);
+        console.error("Dashboard error:", error);
       } finally {
         setLoading(false);
-        setLoadingDetails(false);
       }
     };
-    
-    fetchDashboardData();
+
+    if (user) fetchDashboardData();
   }, [user]);
 
-  // --- HELPER: CALCULATE REAL DATA ---
-  const myEvents = events; 
-
+  // Calculations for Admin Dashboard
   const calculateTotals = (eventList) => {
-    let totalGuests = 0;
     let totalPledged = 0;
     let totalCollected = 0;
-    let totalContributors = 0; 
+    let totalGuests = 0;
+    let totalContributors = 0;
 
-    eventList.forEach(ev => {
-      const guests = ev.contacts?.length || 0; 
-      totalGuests += guests;
-
-      if (ev.contacts) {
-        ev.contacts.forEach(contact => {
-          if (contact.pledge) {
+    eventList.forEach(event => {
+      totalGuests += event.guests?.length || 0;
+      if (event.guests) {
+        event.guests.forEach(guest => {
+          if (guest.pledge) {
             totalContributors++;
-            totalPledged += parseFloat(contact.pledge.pledge_amount || 0);
-            totalCollected += parseFloat(contact.pledge.amount_paid || 0);
+            totalPledged += parseFloat(guest.pledge.amount || 0);
+            totalCollected += parseFloat(guest.pledge.paid_amount || 0);
           }
         });
       }
@@ -152,67 +150,26 @@ const DashboardPage = () => {
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Available</h3>
-                        <div className="p-2 bg-brand-50 text-brand-600 rounded-lg"><CreditCard size={20}/></div>
+                        <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><CreditCard size={20}/></div>
                     </div>
-                    <p className="text-2xl font-bold text-brand-600">{formatCurrency(wallet.available_balance)}</p>
+                    <p className="text-2xl font-bold text-slate-900">{formatCurrency(wallet.available_balance)}</p>
                     <p className="text-xs text-slate-400 mt-2">Ready for withdrawal</p>
-                </div>
-            </div>
-
-            <div className="bg-gradient-to-r from-brand-600 to-brand-800 rounded-2xl p-8 text-white shadow-xl shadow-brand-900/20">
-                <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div>
-                        <h3 className="text-2xl font-bold mb-2">Welcome, {profile.business_name}!</h3>
-                        <p className="text-brand-100 max-w-lg text-sm">Manage your inquiries, bookings, and financial tracking all in one place. Your professionalism is what makes HarusiYangu great.</p>
-                    </div>
-                    <div className="flex gap-4">
-                        <a href="/vendor/profile" className="bg-white text-brand-700 px-6 py-3 rounded-xl font-bold text-sm shadow-lg hover:bg-slate-50 transition-colors">Manage Profile</a>
-                    </div>
                 </div>
             </div>
         </div>
     );
   };
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center h-screen bg-slate-50">
-        <Loader2 className="animate-spin text-brand-600 mb-4" size={40} />
-        <p className="text-slate-600 font-medium">Loading Dashboard Data...</p>
-    </div>
-  );
-
   return (
-    <div className="space-y-6">
-        
-        {/* --- HEADER SECTION --- */}
-        <div className="mb-2">
-          <h2 className="text-2xl font-bold text-slate-900">
-            {user?.role === 'SUPER_ADMIN' ? 'Platform Overview' : 
-             user?.role === 'TREASURER' ? 'Financial Dashboard' :
-             user?.role === 'SECRETARY' ? 'Guest Management Dashboard' :
-             user?.role === 'GATE_OFFICER' ? 'Scanner Access' : 
-             user?.role === 'VENDOR' ? 'Vendor Dashboard' : 'My Dashboard'}
-          </h2>
-          <p className="text-slate-500 mt-1">
-            {user?.role === 'SUPER_ADMIN' 
-              ? 'Monitor platform performance and host activities.' 
-              : user?.role === 'TREASURER'
-              ? 'Track pledges, payments, and budget utilization.'
-              : user?.role === 'SECRETARY'
-              ? 'Manage guest lists, RSVPs, and invitations.'
-              : user?.role === 'VENDOR'
-              ? 'Manage your business, inquiries and earnings.'
-              : `Welcome back, ${user?.first_name || 'User'}. Manage your assigned events.`}
-          </p>
-        </div>
+    <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
+
+        {/* --- 1. VENDOR VIEW --- */}
+        {user?.role === 'VENDOR' && (
+          <VendorDashboardView data={vendorDashboard} />
+        )}
 
         {/* ========================================= */}
-        {/* 0. VENDOR DASHBOARD */}
-        {/* ========================================= */}
-        {user?.role === 'VENDOR' && <VendorDashboardView data={vendorDashboard} />}
-
-        {/* ========================================= */}
-        {/* 1. SUPER ADMIN DASHBOARD (SYSTEM WIDE) */}
+        {/* 2. SUPER ADMIN DASHBOARD (SYSTEM WIDE) */}
         {/* ========================================= */}
         {user?.role === 'SUPER_ADMIN' && (
           <div className="space-y-6">
@@ -261,128 +218,34 @@ const DashboardPage = () => {
               )}
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 className="font-bold text-slate-900">Recent Active Events</h3>
-                <a href="/events" className="text-brand-600 text-sm font-bold flex items-center gap-1 hover:underline">View All <ArrowRight size={14}/></a>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase font-bold text-slate-500">
-                    <tr>
-                      <th className="px-6 py-4">Event Name</th>
-                      <th className="px-6 py-4">Host</th>
-                      <th className="px-6 py-4">Date</th>
-                      <th className="px-6 py-4">Budget</th>
-                      <th className="px-6 py-4">Progress</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {events.slice(0, 5).map(event => (
-                      <tr key={event.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 font-bold text-slate-900">{event.event_name}</td>
-                        <td className="px-6 py-4 text-slate-600">{event.owner?.full_name || 'System'}</td>
-                        <td className="px-6 py-4 text-slate-500">{formatDate(event.event_date)}</td>
-                        <td className="px-6 py-4 font-bold text-slate-900">{formatCurrency(event.target_budget)}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                              <div className="bg-brand-600 h-1.5 rounded-full" style={{ width: `${(calculateTotals([event]).totalCollected / calculateTotals([event]).totalPledged * 100) || 0}%` }}></div>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400">
-                              {((calculateTotals([event]).totalCollected / calculateTotals([event]).totalPledged * 100) || 0).toFixed(0)}%
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================= */}
-        {/* 2. HOST / COMMITTEE DASHBOARD */}
-        {/* ========================================= */}
-        {user?.role !== 'SUPER_ADMIN' && user?.role !== 'VENDOR' && (
-          <div className="space-y-6">
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">My Guests</h3>
-                  <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Users size={20}/></div>
-                </div>
-                <p className="text-3xl font-bold text-slate-900">{stats.totalGuests}</p>
-                <p className="text-xs text-slate-400 mt-2">Across {myEvents.length} events</p>
-              </div>
-
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Pledged</h3>
-                  <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><TrendingUp size={20}/></div>
-                </div>
-                <p className="text-3xl font-bold text-blue-600">{formatCurrency(stats.totalPledged)}</p>
-                <p className="text-xs text-slate-400 mt-2">Total Commitments</p>
-              </div>
-
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Collected</h3>
-                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><CheckCircle size={20}/></div>
-                </div>
-                <p className="text-3xl font-bold text-emerald-600">{formatCurrency(stats.totalCollected)}</p>
-                <p className="text-xs text-slate-400 mt-2">Confirmed Payments</p>
-              </div>
-
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Remaining</h3>
-                  <div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Clock size={20}/></div>
-                </div>
-                <p className="text-3xl font-bold text-orange-600">{formatCurrency(stats.totalPledged - stats.totalCollected)}</p>
-                <p className="text-xs text-slate-400 mt-2">Outstanding Pledges</p>
-              </div>
-            </div>
-
             {/* Financial Overview Card */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
-              <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                   <h3 className="font-bold text-slate-900">Active Events Summary</h3>
-                  <button onClick={() => navigate('/events')} className="text-brand-600 text-sm font-bold flex items-center gap-1 hover:underline">View All <ArrowRight size={14}/></button>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto flex-1">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase font-bold text-slate-500">
                       <tr>
                         <th className="px-6 py-4">Event Name</th>
                         <th className="px-6 py-4">Target</th>
-                        <th className="px-6 py-4">Progress</th>
                         <th className="px-6 py-4 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {myEvents.map(event => (
+                      {loading ? (
+                         <tr><td colSpan="3" className="px-6 py-12 text-center text-slate-400">Loading events...</td></tr>
+                      ) : myEvents.length === 0 ? (
+                         <tr><td colSpan="3" className="px-6 py-12 text-center text-slate-400">No active events found.</td></tr>
+                      ) : myEvents.slice(0, 5).map(event => (
                         <tr key={event.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-6 py-4">
                             <p className="font-bold text-slate-900">{event.event_name}</p>
-                            <p className="text-xs text-slate-400">{formatDate(event.event_date)} ΓÇó {event.event_type}</p>
+                            <p className="text-xs text-slate-400">{formatDate(event.event_date)} • {event.event_type}</p>
                           </td>
                           <td className="px-6 py-4 font-bold text-slate-900">{formatCurrency(event.target_budget)}</td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                <div className="bg-brand-600 h-1.5 rounded-full" style={{ width: `${(calculateTotals([event]).totalCollected / calculateTotals([event]).totalPledged * 100) || 0}%` }}></div>
-                              </div>
-                              <span className="text-[10px] font-bold text-slate-400">
-                                {((calculateTotals([event]).totalCollected / calculateTotals([event]).totalPledged * 100) || 0).toFixed(0)}%
-                              </span>
-                            </div>
-                          </td>
                           <td className="px-6 py-4 text-right">
                             <button 
                               onClick={() => navigate(`/events/${event.id}`)}
@@ -398,27 +261,46 @@ const DashboardPage = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6">
-                <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-4">Quick Actions</h3>
-                <div className="grid grid-cols-1 gap-3">
-                  <button onClick={() => navigate('/events')} className="flex items-center gap-3 p-4 bg-brand-50 text-brand-700 rounded-xl hover:bg-brand-100 transition-colors font-bold text-sm">
-                    <Plus size={20}/> Create New Event
-                  </button>
-                  <button onClick={() => navigate('/profile')} className="flex items-center gap-3 p-4 bg-slate-50 text-slate-700 rounded-xl hover:bg-slate-100 transition-colors font-bold text-sm">
-                    <UserCheck size={20}/> Update My Profile
-                  </button>
-                  <button className="flex items-center gap-3 p-4 bg-slate-50 text-slate-700 rounded-xl hover:bg-slate-100 transition-colors font-bold text-sm">
-                    <Settings size={20}/> Account Settings
-                  </button>
-                </div>
+              {/* Vendor Compliance Widget */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col">
+                <h3 className="font-bold text-slate-900 border-b border-slate-100 pb-4 mb-4 flex items-center gap-2">
+                  <Shield size={18} className="text-brand-600" /> Vendor Compliance Health
+                </h3>
+                
+                {loading ? (
+                   <div className="space-y-4">
+                      <div className="h-16 bg-slate-50 animate-pulse rounded-lg"></div>
+                      <div className="h-16 bg-slate-50 animate-pulse rounded-lg"></div>
+                   </div>
+                ) : (
+                  <div className="space-y-4 flex-1">
+                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl hover:shadow-sm transition-shadow">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Verified Vendors</span>
+                        <CheckCircle size={16} className="text-emerald-500" />
+                      </div>
+                      <p className="text-2xl font-black text-emerald-700">{vendorStats?.vendors?.active || 0}</p>
+                      <p className="text-[10px] text-emerald-600/70 mt-1 font-medium italic">Approved and active on platform</p>
+                    </div>
 
-                <div className="bg-brand-600 rounded-xl p-6 text-white shadow-lg shadow-brand-900/20">
-                  <h4 className="font-bold mb-1">Help Center</h4>
-                  <p className="text-xs text-brand-100 mb-4">Need assistance managing your event? Our support is 24/7.</p>
-                  <button className="w-full py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-bold transition-colors">Contact Support</button>
-                </div>
+                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl hover:shadow-sm transition-shadow">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">Pending Review</span>
+                        <Clock size={16} className="text-amber-500" />
+                      </div>
+                      <p className="text-2xl font-black text-amber-700">{vendorStats?.vendors?.pending || 0}</p>
+                      <p className="text-[10px] text-amber-600/70 mt-1 font-medium italic">Require administrator attention</p>
+                    </div>
+
+                    <button 
+                      onClick={() => navigate('/vendors')}
+                      className="w-full mt-auto py-3 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                    >
+                      Manage All Vendors <ArrowRight size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
-
             </div>
 
           </div>

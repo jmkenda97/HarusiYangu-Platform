@@ -47,4 +47,26 @@ class NotificationService
             return false;
         }
     }
+
+    /**
+     * Notify all Super Admins about important system events.
+     */
+    public static function notifyAdmins(string $subject, string $content, array $data = [])
+    {
+        try {
+            // Default admin notification icon
+            if (!isset($data['icon'])) {
+                $data['icon'] = 'AlertCircle';
+            }
+            
+            $admins = User::role('SUPER_ADMIN')->get();
+            foreach ($admins as $admin) {
+                self::notify($admin, $subject, $content, $data);
+            }
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Admin notification failed: ' . $e->getMessage());
+            return false;
+        }
+    }
 }

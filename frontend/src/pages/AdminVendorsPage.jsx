@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../api/axios';
 import { 
-    Store, Search, CheckCircle, XCircle, Ban, Check, 
+    Store, Search, CheckCircle, XCircle, Ban, Check, Trash2,
     FileText, Phone, Mail, MapPin, Star, ChevronDown, ChevronUp,
     ExternalLink, Loader2, AlertCircle, ArrowRight, X, Shield,
     Calendar, DollarSign, Clock, ChevronLeft, ChevronRight
@@ -95,54 +95,6 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview, onAct
     const [rejectionReason, setRejectionReason] = useState('');
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectTarget, setRejectTarget] = useState(null);
-
-    const RejectModal = () => {
-        if (!showRejectModal) return null;
-
-        let title = "Reject Request";
-        if (rejectTarget?.type === 'vendor') title = "Reject Vendor Registration";
-        if (rejectTarget?.type === 'document') title = "Reject Verification Document";
-        if (rejectTarget?.type === 'service') title = "Reject Service Verification";
-
-        return createPortal(
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => setShowRejectModal(false)}>
-                <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-                        <h3 className="font-bold text-slate-900">{title}</h3>
-                        <button onClick={() => setShowRejectModal(false)} className="text-slate-400 hover:text-slate-600">
-                            <X size={20} />
-                        </button>
-                    </div>
-                    <div className="p-6">
-                        <p className="text-sm text-slate-600 mb-4 font-medium">Please provide a reason for this rejection. This will be visible to the vendor.</p>
-                        <textarea
-                            value={rejectionReason}
-                            onChange={(e) => setRejectionReason(e.target.value)}
-                            className="w-full h-32 p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none resize-none transition-all"
-                            placeholder="Type rejection reason here..."
-                            required
-                        />
-                        <div className="flex gap-3 mt-6">
-                            <button 
-                                onClick={() => setShowRejectModal(false)}
-                                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={confirmReject}
-                                disabled={!rejectionReason.trim()}
-                                className="flex-1 px-4 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors shadow-lg shadow-red-500/20"
-                            >
-                                Confirm Rejection
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>,
-            document.body
-        );
-    };
 
     const fetchVendorDetails = useCallback(async () => {
         if (vendorDetails || loadingDetails) return;
@@ -277,9 +229,51 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview, onAct
     const activeServices = vendorDetails?.services?.filter(s => s.is_verified && s.is_available).length || 0;
     const pendingServices = vendorDetails?.services?.filter(s => !s.is_verified).length || 0;
 
+    let modalTitle = "Reject Request";
+    if (rejectTarget?.type === 'vendor') modalTitle = "Reject Vendor Registration";
+    if (rejectTarget?.type === 'document') modalTitle = "Reject Verification Document";
+    if (rejectTarget?.type === 'service') modalTitle = "Reject Service Verification";
+
     return (
         <>
-            <RejectModal />
+            {showRejectModal && createPortal(
+                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => setShowRejectModal(false)}>
+                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                            <h3 className="font-bold text-slate-900">{modalTitle}</h3>
+                            <button onClick={() => setShowRejectModal(false)} className="text-slate-400 hover:text-slate-600">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-sm text-slate-600 mb-4 font-medium">Please provide a reason for this rejection. This will be visible to the vendor.</p>
+                            <textarea
+                                value={rejectionReason}
+                                onChange={(e) => setRejectionReason(e.target.value)}
+                                className="w-full h-32 p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none resize-none transition-all"
+                                placeholder="Type rejection reason here..."
+                                required
+                            />
+                            <div className="flex gap-3 mt-6">
+                                <button 
+                                    onClick={() => setShowRejectModal(false)}
+                                    className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={confirmReject}
+                                    disabled={!rejectionReason.trim()}
+                                    className="flex-1 px-4 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors shadow-lg shadow-red-500/20"
+                                >
+                                    Confirm Rejection
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
             <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={handleToggleExpand}>
                 <td className="px-6 py-4 text-center font-mono text-xs text-slate-400">{index}</td>
                 <td className="px-6 py-4">
@@ -325,6 +319,29 @@ const VendorDetailRow = React.memo(({ vendor, index, showToast, onPreview, onAct
                         )}
                         {vendor.status === 'ACTIVE' && <button onClick={() => handleAction('block')} disabled={actionLoading} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors" title="Block Vendor">{actionLoading === 'block' ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}</button>}
                         {vendor.status === 'BLACKLISTED' && <button onClick={() => handleAction('unblock')} disabled={actionLoading} className="p-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 transition-colors" title="Unblock Vendor">{actionLoading === 'unblock' ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}</button>}
+                        
+                        <button 
+                            onClick={async () => {
+                                if (window.confirm('Are you sure you want to delete this vendor?')) {
+                                    setActionLoading('delete');
+                                    try {
+                                        await api.delete(`/admin/vendors/${vendor.id}`);
+                                        showToast('Vendor account deactivated and removed.');
+                                        if (onActionSuccess) onActionSuccess();
+                                    } catch (error) {
+                                        showToast(error.response?.data?.message || 'Failed to delete vendor.', 'error');
+                                    } finally {
+                                        setActionLoading(null);
+                                    }
+                                }
+                            }} 
+                            disabled={actionLoading} 
+                            className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 text-red-700 dark:text-red-300 transition-colors" 
+                            title="Delete Vendor"
+                        >
+                            {actionLoading === 'delete' ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
+
                         <button onClick={handleToggleExpand} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">{isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
                     </div>
                 </td>
@@ -660,7 +677,17 @@ const AdminVendorsPage = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {loading ? <tr><td colSpan="7" className="px-6 py-12 text-center"><div className="flex items-center justify-center gap-2 text-slate-400"><Loader2 size={20} className="animate-spin" />Loading vendors...</div></td></tr> : vendors.length === 0 ? <tr><td colSpan="7" className="px-6 py-12 text-center"><div className="flex flex-col items-center gap-3 text-slate-400"><Store size={40} className="opacity-50" /><p>No vendors found.</p></div></td></tr> : paginatedVendors.map((vendor, idx) => (
-                                <VendorDetailRow key={vendor.id} vendor={vendor} index={(currentPage - 1) * itemsPerPage + idx + 1} showToast={showToast} onPreview={setPreviewDoc} onActionSuccess={fetchStats} />
+                                <VendorDetailRow 
+                                    key={vendor.id} 
+                                    vendor={vendor} 
+                                    index={(currentPage - 1) * itemsPerPage + idx + 1} 
+                                    showToast={showToast} 
+                                    onPreview={setPreviewDoc} 
+                                    onActionSuccess={() => {
+                                        fetchStats();
+                                        fetchVendors();
+                                    }} 
+                                />
                             ))}
                         </tbody>
                     </table>
