@@ -11,6 +11,9 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
+use App\Models\WalletLedgerEntry;
+use App\Models\EventWallet;
+
 class EventPaymentController extends Controller
 {
     /**
@@ -18,7 +21,7 @@ class EventPaymentController extends Controller
      */
     public function store(Request $request, $eventId)
     {
-        $event = Event::findOrFail($eventId);
+        $event = Event::with('wallet')->findOrFail($eventId);
 
         // --- CHANGE: Use Policy Check ---
         $this->authorize('manageContributions', $event);
@@ -26,12 +29,13 @@ class EventPaymentController extends Controller
         $request->validate([
             'pledge_id' => 'required|uuid|exists:contribution_pledges,id',
             'amount' => 'required|numeric|gt:0',
-            'payment_method' => ['required', Rule::in(['CASH', 'MPESA', 'AIRTEL_MONEY', 'BANK_TRANSFER', 'OTHER'])],
+            'payment_method' => ['required', \Illuminate\Validation\Rule::in(['CASH', 'MPESA', 'AIRTEL_MONEY', 'BANK_TRANSFER', 'OTHER'])],
             'transaction_reference' => 'nullable|string',
             'notes' => 'nullable|string',
+            'metadata' => 'nullable|array'
         ]);
 
-        $pledge = ContributionPledge::where('id', $request->pledge_id)
+        $pledge = \App\Models\ContributionPledge::with('contact')->where('id', $request->pledge_id)
             ->where('event_id', $event->id)
             ->firstOrFail();
 
@@ -39,7 +43,7 @@ class EventPaymentController extends Controller
             DB::transaction(function () use ($request, $event, $pledge) {
                 $receipt = 'REC-' . strtoupper(Str::random(8));
 
-                ContributionPayment::create([
+                $payment = ContributionPayment::create([
                     'id' => Str::uuid(),
                     'event_id' => (string) $event->id,
                     'pledge_id' => (string) $pledge->id,
@@ -53,6 +57,28 @@ class EventPaymentController extends Controller
                     'confirmed_at' => now(),
                     'notes' => $request->notes,
                     'recorded_by' => (string) auth()->id(),
+                    'metadata' => $request->metadata
+                ]);
+
+                // Ensure Wallet Exists
+                $wallet = EventWallet::firstOrCreate(
+                    ['event_id' => $event->id],
+                    ['id' => (string) Str::uuid()]
+                );
+
+                // Write to Ledger (Perfect Traceability)
+                WalletLedgerEntry::create([
+                    'id' => (string) Str::uuid(),
+                    'wallet_id' => $wallet->id,
+                    'event_id' => $event->id,
+                    'entry_type' => 'CREDIT',
+                    'source_type' => 'CONTRIBUTION',
+                    'source_id' => $payment->id,
+                    'amount' => $request->amount,
+                    'description' => "Contribution from {$pledge->contact->full_name} via {$request->payment_method}",
+                    'entry_date' => now(),
+                    'created_by' => auth()->id(),
+                    'metadata' => array_merge($request->metadata ?? [], ['contact_name' => $pledge->contact->full_name])
                 ]);
             });
 

@@ -31,12 +31,14 @@ class ContributionPayment extends Model
         'confirmed_at',
         'notes',
         'recorded_by',
+        'metadata',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'paid_at' => 'datetime',
         'confirmed_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     // --- RELATIONSHIPS ---

@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\EventVendorController;
 use App\Http\Controllers\Api\VendorController;
 use App\Http\Controllers\Api\VendorServiceController;
 use App\Http\Controllers\Api\VendorDocumentController;
+use App\Http\Controllers\Api\VendorInquiryController;
 // CORRECTED IMPORT: NO 'Api\' BECAUSE CONTROLLER IS IN app/Http/Controllers
 use App\Http\Controllers\EventCommitteeController;
 
@@ -51,7 +52,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Event Bookings & Negotiation (Task #4)
-        Route::post('/events/{eventId}/inquiry', [\App\Http\Controllers\Api\EventBookingController::class, 'sendInquiry']);
+        Route::post('/events/{eventId}/inquiry', [VendorInquiryController::class, 'store']);
         Route::put('/bookings/{bookingId}/quote', [\App\Http\Controllers\Api\EventBookingController::class, 'sendQuote']);
         Route::put('/bookings/{bookingId}/accept', [\App\Http\Controllers\Api\EventBookingController::class, 'acceptQuote']);
         Route::put('/bookings/{bookingId}/confirm-service', [\App\Http\Controllers\Api\EventBookingController::class, 'confirmServiceReceived']);

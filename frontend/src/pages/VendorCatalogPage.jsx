@@ -114,12 +114,13 @@ const VendorCard = ({ vendor, onViewProfile }) => {
 
 const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
     const [selectedEvent, setSelectedEvent] = useState('');
-    const [budgetItems, setBudgetItems] = useState([]);
+    const [budgetItemsList, setBudgetItemsList] = useState([]);
     const [loadingBudget, setLoadingBudget] = useState(false);
     const [inquiryForm, setInquiryForm] = useState({
         budget_item_id: '',
         assigned_service: '',
-        contract_notes: ''
+        contract_notes: '',
+        target_amount: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showInquiryForm, setShowInquiryForm] = useState(false);
@@ -129,7 +130,7 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
         if (selectedEvent) {
             fetchBudgetItems(selectedEvent);
         } else {
-            setBudgetItems([]);
+            setBudgetItemsList([]);
         }
     }, [selectedEvent]);
 
@@ -137,9 +138,11 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
         setLoadingBudget(true);
         try {
             const res = await api.get(`/events/${eventId}/budget`);
-            setBudgetItems(res.data.data || []);
+            // The API returns { items: [], categories: [] }
+            setBudgetItemsList(res.data.data.items || []);
         } catch (err) {
             console.error('Failed to fetch budget items', err);
+            setBudgetItemsList([]);
         } finally {
             setLoadingBudget(false);
         }
@@ -185,7 +188,7 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
         
         setIsSubmitting(true);
         try {
-            await api.post(`/events/${selectedEvent}/inquiry`, {
+            const res = await api.post(`/events/${selectedEvent}/inquiry`, {
                 vendor_id: vendor.id,
                 ...inquiryForm
             });
@@ -194,7 +197,9 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                 setShowInquiryForm(false);
                 setSuccessMessage('');
                 onClose();
-            }, 3000);
+                // Redirection to the event's vendor tab
+                navigate(`/events/${selectedEvent}?tab=vendors`);
+            }, 2000);
         } catch (err) {
             alert(err.response?.data?.message || 'Failed to send inquiry');
         } finally {
@@ -318,7 +323,7 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                                                     className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-brand-500/10 outline-none bg-white dark:bg-slate-900 dark:text-white transition-all disabled:opacity-50"
                                                     value={inquiryForm.budget_item_id}
                                                     onChange={e => {
-                                                        const item = budgetItems.find(i => i.id === e.target.value);
+                                                        const item = budgetItemsList.find(i => i.id === e.target.value);
                                                         setInquiryForm({
                                                             ...inquiryForm, 
                                                             budget_item_id: e.target.value,
@@ -327,23 +332,35 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                                                     }}
                                                 >
                                                     <option value="">{loadingBudget ? 'Loading...' : '-- Select Budget Item --'}</option>
-                                                    {budgetItems.map(item => (
+                                                    {budgetItemsList.map(item => (
                                                         <option key={item.id} value={item.id}>{item.item_name} (Est: {formatCurrency(item.estimated_cost)})</option>
                                                     ))}
                                                 </select>
                                             </div>
                                         </div>
 
-                                        <div className="space-y-1.5">
-                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Service Requirements</label>
-                                            <input 
-                                                type="text" 
-                                                required
-                                                placeholder="e.g. Wedding Photography (Full Day Package)"
-                                                className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-brand-500/10 outline-none bg-white dark:bg-slate-900 dark:text-white shadow-sm"
-                                                value={inquiryForm.assigned_service}
-                                                onChange={e => setInquiryForm({...inquiryForm, assigned_service: e.target.value})}
-                                            />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Service Requirements</label>
+                                                <input 
+                                                    type="text" 
+                                                    required
+                                                    placeholder="e.g. Wedding Photography"
+                                                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-brand-500/10 outline-none bg-white dark:bg-slate-900 dark:text-white shadow-sm"
+                                                    value={inquiryForm.assigned_service}
+                                                    onChange={e => setInquiryForm({...inquiryForm, assigned_service: e.target.value})}
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="block text-[10px] font-black text-brand-600 uppercase tracking-widest">Target Price (Optional Bargain)</label>
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="e.g. 350000"
+                                                    className="w-full border border-brand-200 dark:border-brand-900/30 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-brand-500/10 outline-none bg-brand-50/10 dark:bg-brand-900/10 dark:text-white shadow-inner font-bold"
+                                                    value={inquiryForm.target_amount}
+                                                    onChange={e => setInquiryForm({...inquiryForm, target_amount: e.target.value})}
+                                                />
+                                            </div>
                                         </div>
 
                                         <div className="space-y-1.5">
@@ -393,8 +410,8 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-brand-600 dark:text-brand-400 font-black text-lg">{formatCurrency(service.min_price)}</p>
-                                            <p className="text-[10px] text-slate-400 font-bold uppercase">Starting From</p>
+                                            <p className="text-brand-600 dark:text-brand-400 font-black text-lg">{formatCurrency(service.min_price)} - {formatCurrency(service.max_price)}</p>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase">Price Range</p>
                                         </div>
                                     </div>
                                     <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-6">

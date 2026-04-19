@@ -849,7 +849,7 @@ const EventDetailsPage = () => {
                     </div>
                 )}
 
-                {/* 5. VENDORS TAB (Preserved logic) */}
+                {/* 5. VENDORS TAB (Reordered: Negotiations first, then Confirmed) */}
                 {activeTab === 'vendors' && (
                     <div className="space-y-6 animate-in fade-in duration-300">
                         <div className="bg-gradient-to-r from-brand-600 to-brand-800 p-8 rounded-3xl text-white shadow-xl flex flex-col md:flex-row justify-between items-center gap-6 overflow-hidden relative">
@@ -861,6 +861,38 @@ const EventDetailsPage = () => {
                             <div className="absolute -right-10 -bottom-10 opacity-20 pointer-events-none transform rotate-12"><Briefcase size={200} /></div>
                         </div>
 
+                        {/* NEGOTIATIONS SECTION - NOW AT THE TOP */}
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                            <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
+                                <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-xs flex items-center gap-2"><Briefcase className="text-blue-500" size={16} /> Negotiations & Quotes</h3>
+                                <span className="text-[10px] font-black uppercase bg-blue-100 text-blue-700 px-3 py-1 rounded-full shadow-sm">In Progress</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase font-bold text-slate-500 tracking-widest border-b border-slate-100 dark:border-slate-800">
+                                        <tr><th className="px-6 py-4">#</th><th className="px-6 py-4">Vendor</th><th className="px-6 py-4">Current Status</th><th className="px-6 py-4 text-right">Last Quote</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                        {vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).length === 0 ? <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic font-medium">No active inquiries at the moment.</td></tr> : vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).map((v, idx) => (
+                                            <tr key={v.id} className="hover:bg-slate-50/50 transition-colors group">
+                                                <td className="px-6 py-4 text-center font-mono text-xs text-slate-300">{idx + 1}</td>
+                                                <td className="px-6 py-4"><div className="font-bold text-slate-900 dark:text-white">{v.vendor?.business_name}</div><div className="text-[10px] font-medium text-slate-400 uppercase">{v.assigned_service}</div></td>
+                                                <td className="px-6 py-4"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border tracking-widest ${v.status === 'QUOTED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>{v.status}</span></td>
+                                                <td className="px-6 py-4 text-right font-black text-slate-900 dark:text-white">{v.last_quote_amount && parseFloat(v.last_quote_amount) > 0 ? formatCurrency(v.last_quote_amount) : 'Waiting for Quote'}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-3">
+                                                        {v.status === 'QUOTED' && <button onClick={() => handleAcceptQuote(v.id)} className="bg-brand-600 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-md">Accept Quote</button>}
+                                                        <button onClick={() => handleDeleteVendor(v.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* CONFIRMED HIRES - NOW AT THE BOTTOM */}
                         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
                             <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
                                 <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-xs flex items-center gap-2"><Award className="text-emerald-500" size={16} /> Confirmed Hires</h3>
@@ -884,36 +916,6 @@ const EventDetailsPage = () => {
                                                     <div className="flex items-center justify-end gap-2">
                                                         {parseFloat(v.balance_due) > 0 && <button onClick={() => openVendorPaymentModal(v)} className="bg-emerald-50 text-emerald-600 p-2.5 rounded-xl hover:bg-emerald-100 transition-all shadow-sm" title="Record Milestone Payment"><DollarSign size={20} /></button>}
                                                         <button onClick={() => handleConfirmService(v.id)} className="bg-brand-50 text-brand-600 p-2.5 rounded-xl hover:bg-brand-100 transition-all shadow-sm" title="Confirm Service Completion"><CheckCircle size={20} /></button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-                            <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
-                                <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-xs flex items-center gap-2"><Briefcase className="text-blue-500" size={16} /> Negotiations & Quotes</h3>
-                                <span className="text-[10px] font-black uppercase bg-blue-100 text-blue-700 px-3 py-1 rounded-full shadow-sm">In Progress</span>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase font-bold text-slate-500 tracking-widest border-b border-slate-100 dark:border-slate-800">
-                                        <tr><th className="px-6 py-4">#</th><th className="px-6 py-4">Vendor</th><th className="px-6 py-4">Current Status</th><th className="px-6 py-4 text-right">Last Quote</th><th className="px-6 py-4 text-right">Actions</th></tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                        {vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).length === 0 ? <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic font-medium">No active inquiries at the moment.</td></tr> : vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).map((v, idx) => (
-                                            <tr key={v.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                <td className="px-6 py-4 text-center font-mono text-xs text-slate-300">{idx + 1}</td>
-                                                <td className="px-6 py-4"><div className="font-bold text-slate-900 dark:text-white">{v.vendor?.business_name}</div><div className="text-[10px] font-medium text-slate-400 uppercase">{v.assigned_service}</div></td>
-                                                <td className="px-6 py-4"><span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border tracking-widest ${v.status === 'QUOTED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>{v.status}</span></td>
-                                                <td className="px-6 py-4 text-right font-black text-slate-900 dark:text-white">{v.last_quote_amount ? formatCurrency(v.last_quote_amount) : '---'}</td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-3">
-                                                        {v.status === 'QUOTED' && <button onClick={() => handleAcceptQuote(v.id)} className="bg-brand-600 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-md">Accept Quote</button>}
-                                                        <button onClick={() => handleDeleteVendor(v.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1065,8 +1067,15 @@ const EventDetailsPage = () => {
                                 </div>
                             )}
                             <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Milestone Phase</label><div className="grid grid-cols-2 gap-2">{['DEPOSIT', 'INTERIM', 'FINAL', 'CUSTOM'].map(m => <button key={m} type="button" onClick={() => setVendorPaymentData({ ...vendorPaymentData, milestone: m })} className={`py-3 px-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${vendorPaymentData.milestone === m ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-brand-300'}`}>{m}</button>)}</div></div>
-                            <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Disbursement Amount (TZS)</label><input required type="number" className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 rounded-2xl px-6 py-4 font-black text-slate-900 dark:text-white text-2xl outline-none focus:ring-4 focus:ring-brand-500/10 shadow-inner" value={vendorPaymentData.amount} onChange={e => setVendorPaymentData({ ...vendorPaymentData, amount: e.target.value })} /></div>
-                            <div className="pt-4"><button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 dark:bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-black/20 flex items-center justify-center gap-3">{isSubmitting ? 'Processing Disbursement...' : <><DollarSign size={20} /> Authorize Payment</>}</button></div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 flex justify-between">
+                                    Disbursement Amount (TZS)
+                                    {vendorPaymentInfo?.next_suggested && (
+                                        <span className="text-brand-600 animate-pulse">Suggested: {vendorPaymentInfo.next_suggested.percentage}%</span>
+                                    )}
+                                </label>
+                                <input required type="number" className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 rounded-2xl px-6 py-4 font-black text-slate-900 dark:text-white text-2xl outline-none focus:ring-4 focus:ring-brand-500/10 shadow-inner" value={vendorPaymentData.amount} onChange={e => setVendorPaymentData({ ...vendorPaymentData, amount: e.target.value })} />
+                            </div>                            <div className="pt-4"><button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 dark:bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-black/20 flex items-center justify-center gap-3">{isSubmitting ? 'Processing Disbursement...' : <><DollarSign size={20} /> Authorize Payment</>}</button></div>
                         </form>
                     </div>
                 </div>

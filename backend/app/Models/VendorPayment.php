@@ -32,6 +32,7 @@ class VendorPayment extends Model
         'is_released',
         'milestone',
         'milestone_percentage',
+        'metadata',
     ];
 
     protected $casts = [
@@ -39,6 +40,7 @@ class VendorPayment extends Model
         'payment_date' => 'datetime',
         'is_released' => 'boolean',
         'milestone_percentage' => 'decimal:2',
+        'metadata' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

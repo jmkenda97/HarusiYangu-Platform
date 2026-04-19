@@ -153,11 +153,22 @@ class VendorController extends Controller
             ->where('vendor_id', $vendor->id)
             ->get();
 
+        // Get confirmed event dates to check for conflicts
+        $confirmedDates = $assignedEvents->where('status', 'ACCEPTED')
+            ->pluck('event.event_date')
+            ->filter()
+            ->map(fn($date) => $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : (string)$date)
+            ->toArray();
+
         $confirmedEvents = $assignedEvents->where('status', 'ACCEPTED')->map(function ($ev) {
             return [
                 'id' => $ev->id,
                 'event_name' => $ev->event?->event_name,
                 'event_date' => $ev->event?->event_date,
+                'venue_name' => $ev->event?->venue_name,
+                'venue_address' => $ev->event?->venue_address,
+                'host_name' => $ev->event?->owner?->first_name . ' ' . $ev->event?->owner?->last_name,
+                'host_phone' => $ev->event?->owner?->phone,
                 'assigned_service' => $ev->assigned_service,
                 'agreed_amount' => $ev->agreed_amount,
                 'amount_paid' => $ev->amount_paid,
@@ -165,12 +176,17 @@ class VendorController extends Controller
             ];
         })->values();
 
-        $inquiries = $assignedEvents->whereIn('status', ['INQUIRY', 'QUOTED'])->map(function ($ev) {
+        $inquiries = $assignedEvents->whereIn('status', ['INQUIRY', 'QUOTED'])->map(function ($ev) use ($confirmedDates) {
+            $eventDate = $ev->event?->event_date;
+            $formattedDate = $eventDate instanceof \DateTimeInterface ? $eventDate->format('Y-m-d') : (string)$eventDate;
+            $hasConflict = in_array($formattedDate, $confirmedDates);
+
             return [
                 'id' => $ev->id,
                 'event_id' => $ev->event_id,
                 'event_name' => $ev->event?->event_name,
                 'event_date' => $ev->event?->event_date,
+                'has_conflict' => $hasConflict, // Conflict check for "Perfect and Standard" vendor view
                 'host_name' => $ev->event?->owner?->first_name . ' ' . $ev->event?->owner?->last_name,
                 'host_phone' => $ev->event?->owner?->phone,
                 'assigned_service' => $ev->assigned_service,

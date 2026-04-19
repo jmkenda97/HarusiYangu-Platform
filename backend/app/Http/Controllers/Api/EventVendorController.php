@@ -38,6 +38,8 @@ class EventVendorController extends Controller
                     'id' => $eventVendor->id,
                     'vendor' => $eventVendor->vendor,
                     'assigned_service' => $eventVendor->assigned_service,
+                    'status' => $eventVendor->status,
+                    'last_quote_amount' => $eventVendor->last_quote_amount,
                     'agreed_amount' => $eventVendor->agreed_amount,
                     'amount_paid' => $eventVendor->amount_paid,
                     'balance_due' => $eventVendor->balance_due,

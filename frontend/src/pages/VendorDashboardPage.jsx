@@ -161,7 +161,7 @@ const VendorDashboardPage = () => {
 
     const stats = useMemo(() => {
         if (!dashboardData) return null;
-        const { profile, services, documents, events, inquiries, financials } = dashboardData;
+        const { profile, services, documents, events, inquiries, wallet } = dashboardData;
         const approvedDocs = documents?.filter(d => d.verification_status === 'APPROVED').length || 0;
         const pendingDocs = documents?.filter(d => d.verification_status === 'PENDING').length || 0;
         const rejectedDocs = documents?.filter(d => d.verification_status === 'REJECTED').length || 0;
@@ -172,8 +172,8 @@ const VendorDashboardPage = () => {
             documentSummary: { approved: approvedDocs, pending: pendingDocs, rejected: rejectedDocs },
             assignedEvents: events?.length || 0,
             pendingInquiries: inquiries?.filter(i => i.status === 'INQUIRY').length || 0,
-            totalEarnings: financials?.total_earnings || 0,
-            pendingBalance: financials?.pending_balance || 0
+            totalEarnings: wallet?.total_earnings || 0,
+            pendingBalance: wallet?.pending_balance || 0
         };
     }, [dashboardData]);
 
@@ -378,11 +378,18 @@ const VendorDashboardPage = () => {
                                                 {(inquiryPage - 1) * itemsPerPage + idx + 1}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="font-bold text-slate-900 dark:text-white">{inquiry.event_name}</div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="font-bold text-slate-900 dark:text-white">{inquiry.event_name}</div>
+                                                    {inquiry.has_conflict && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 border border-red-100 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm" title="You already have a confirmed booking for this date">
+                                                            <AlertCircle size={10} /> Conflict
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
                                                     <User size={10} /> {inquiry.host_name}
                                                     <span className="text-slate-300 mx-1">•</span>
-                                                    <Clock size={10} /> {new Date(inquiry.event_date).toLocaleDateString()}
+                                                    <Calendar size={10} /> {new Date(inquiry.event_date).toLocaleDateString()}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
@@ -458,7 +465,14 @@ const VendorDashboardPage = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="font-bold text-slate-900 dark:text-white">{event.event_name}</div>
-                                                <div className="text-xs text-slate-400">{new Date(event.event_date).toLocaleDateString()}</div>
+                                                <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
+                                                    <Calendar size={10} /> {new Date(event.event_date).toLocaleDateString()}
+                                                    <span className="text-slate-300 mx-1">•</span>
+                                                    <User size={10} /> {event.host_name}
+                                                </div>
+                                                <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1 truncate max-w-[200px]">
+                                                    <Building2 size={10} /> {event.venue_name || 'Venue TBD'}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 font-medium text-slate-600 dark:text-slate-300">{event.assigned_service}</td>
                                             <td className="px-6 py-4 text-right font-bold text-slate-900 dark:text-white">{formatCurrency(event.agreed_amount)}</td>

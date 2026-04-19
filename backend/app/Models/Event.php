@@ -122,4 +122,9 @@ class Event extends Model
     {
         return $this->hasMany(VendorPayment::class, 'event_id');
     }
+
+    public function wallet(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(EventWallet::class, 'event_id');
+    }
 }

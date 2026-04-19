@@ -12,6 +12,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
+use App\Models\WalletLedgerEntry;
+
 class VendorPaymentController extends Controller
 {
     /**
@@ -23,7 +25,7 @@ class VendorPaymentController extends Controller
         $payments = VendorPayment::where('event_vendor_id', $bookingId)->orderBy('created_at', 'desc')->get();
 
         $nextMilestone = 'DEPOSIT';
-        $suggestedPercentage = 20;
+        $suggestedPercentage = 30; // Changed to 30% based on GEMINI2.md
 
         if ($payments->count() > 0) {
             $hasDeposit = $payments->where('milestone', 'DEPOSIT')->count() > 0;
@@ -31,12 +33,11 @@ class VendorPaymentController extends Controller
 
             if ($hasDeposit && !$hasInterim) {
                 $nextMilestone = 'INTERIM';
-                $suggestedPercentage = 50;
+                $suggestedPercentage = 30; // 30% Interim
             } elseif ($hasDeposit && $hasInterim) {
                 $nextMilestone = 'FINAL';
-                $suggestedPercentage = 30;
+                $suggestedPercentage = 40; // 40% Final
             } else {
-                // If it's a custom payment or something else, default to 0
                 $nextMilestone = 'CUSTOM';
                 $suggestedPercentage = 0;
             }
@@ -69,7 +70,8 @@ class VendorPaymentController extends Controller
             'milestone' => 'required|string|in:DEPOSIT,INTERIM,FINAL,CUSTOM',
             'payment_method' => 'required|string',
             'transaction_reference' => 'nullable|string',
-            'notes' => 'nullable|string'
+            'notes' => 'nullable|string',
+            'metadata' => 'nullable|array'
         ]);
 
         $booking = EventVendor::with(['event', 'event.wallet', 'vendor', 'vendor.user'])->findOrFail($bookingId);
@@ -87,8 +89,8 @@ class VendorPaymentController extends Controller
 
         DB::beginTransaction();
         try {
-            // Following GEMINI.md: DEPOSIT/INTERIM are released to lock date/work.
-            // FINAL is held until Host confirms service delivery.
+            // DEPOSIT/INTERIM (30%/30%) are released to vendor immediately.
+            // FINAL (40%) is held until Host confirms service delivery.
             $isReleased = in_array($request->milestone, ['DEPOSIT', 'INTERIM']);
 
             // 1. Create Payment Record
@@ -105,7 +107,8 @@ class VendorPaymentController extends Controller
                 'payment_date' => now(),
                 'notes' => $request->notes,
                 'recorded_by' => auth()->id(),
-                'is_released' => $isReleased
+                'is_released' => $isReleased,
+                'metadata' => $request->metadata
             ]);
 
             // 2. Update Event Wallet (Deduct)
@@ -129,12 +132,32 @@ class VendorPaymentController extends Controller
             $booking->increment('amount_paid', $request->amount);
             $booking->decrement('balance_due', $request->amount);
 
-            // 5. Notify Vendor
+            // 5. Write to Ledger (Perfect Traceability)
+            WalletLedgerEntry::create([
+                'id' => (string) Str::uuid(),
+                'wallet_id' => $wallet->id,
+                'event_id' => $booking->event_id,
+                'entry_type' => 'DEBIT',
+                'source_type' => 'VENDOR_PAYMENT',
+                'source_id' => $payment->id,
+                'amount' => $request->amount,
+                'description' => "Milestone Payment ({$request->milestone}) to {$booking->vendor->business_name}",
+                'entry_date' => now(),
+                'created_by' => auth()->id(),
+                'metadata' => array_merge($request->metadata ?? [], ['vendor_name' => $booking->vendor->business_name])
+            ]);
+
+            // 6. Automatically Transition Event to ACTIVE on first Deposit
+            if ($request->milestone === 'DEPOSIT' && $booking->event->event_status === 'PLANNING') {
+                $booking->event->update(['event_status' => 'ACTIVE']);
+            }
+
+            // 7. Notify Vendor
             NotificationService::notify(
                 $booking->vendor->user,
                 "Payment Received: " . formatCurrency($request->amount),
                 "A payment of " . formatCurrency($request->amount) . " has been recorded for " . $booking->event->event_name . " (" . $request->milestone . ").",
-                ['icon' => 'DollarSign', 'event_id' => $booking->event_id],
+                ['icon' => 'DollarSign', 'event_id' => $booking->event_id, 'booking_id' => $booking->id],
                 auth()->user()
             );
 

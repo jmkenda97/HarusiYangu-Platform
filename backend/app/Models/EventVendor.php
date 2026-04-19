@@ -33,6 +33,8 @@ class EventVendor extends Model
         'start_date',
         'end_date',
         'created_by',
+        'metadata',
+        'rejection_reason',
     ];
 
     protected $casts = [
@@ -42,6 +44,7 @@ class EventVendor extends Model
         'balance_due' => 'decimal:2',
         'start_date' => 'date',
         'end_date' => 'date',
+        'metadata' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
