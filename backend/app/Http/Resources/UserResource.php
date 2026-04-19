@@ -17,6 +17,7 @@ class UserResource extends JsonResource
             'phone' => $this->phone,
             'email' => $this->email,
             'role' => $this->role,
+             'display_role' => $this->getDisplayRole(),
             'status' => $this->status,
             'onboarding_completed' => (bool) $this->onboarding_completed,
             'is_phone_verified' => (bool) $this->is_phone_verified,
@@ -29,7 +30,7 @@ class UserResource extends JsonResource
             'roles' => $this->roles->pluck('name'),
             'permissions' => $this->getAllPermissions()->pluck('name'),
             // ------------------------
-            
+
             'committee_memberships' => $this->committeeMemberships->map(function($membership) {
                 return [
                     'event_id' => $membership->event_id,

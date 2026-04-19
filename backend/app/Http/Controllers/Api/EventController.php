@@ -26,16 +26,17 @@ class EventController extends Controller
 
         if ($user->role === 'SUPER_ADMIN') {
             // Admin sees everything (except archived)
-        } elseif ($user->role === 'HOST') {
-            // Host sees only their owned events
-            $query->where('owner_user_id', $user->id);
         } else {
-            // Committee members see events they participate in
-            $eventIds = $user->committeeMemberships()->pluck('event_id');
-            $query->whereIn('id', $eventIds);
+            // Everyone else (Host or Committee) sees events they OWN or are a MEMBER of
+            $query->where(function($q) use ($user) {
+                $q->where('owner_user_id', $user->id)
+                  ->orWhereHas('committee', function($sq) use ($user) {
+                      $sq->where('user_id', $user->id);
+                  });
+            });
         }
 
-        $events = $query->orderBy('created_at', 'desc')->get();
+        $events = $query->with(['committee', 'contacts.pledge'])->orderBy('created_at', 'desc')->get();
 
         return response()->json([
             'success' => true,

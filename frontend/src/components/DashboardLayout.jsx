@@ -97,7 +97,8 @@ const SidebarContent = ({ sidebarOpen, setSidebarOpen, isDesktopCollapsed, toggl
                     // --- ADDED THIS LINE TO HIDE "MY EVENTS" FOR SUPER ADMIN ---
                     if (item.name === 'My Events' && user?.role === 'SUPER_ADMIN') return null;
 
-                    if (item.name === 'My Profile' && user?.role !== 'HOST') return null;
+                    // --- MY PROFILE: For HOST and COMMITTEE ---
+                    if (item.name === 'My Profile' && user?.role !== 'HOST' && user?.role !== 'COMMITTEE_MEMBER') return null;
 
                     // --- VENDORS: Only for SUPER_ADMIN and ADMIN ---
                     if (item.name === 'Vendors' && user?.role !== 'SUPER_ADMIN' && user?.role !== 'ADMIN') return null;
@@ -242,7 +243,7 @@ const DashboardLayout = () => {
                             >
                                 <div className="text-right hidden sm:block">
                                     <p className="text-sm font-semibold text-slate-900 dark:text-white">{user?.full_name || 'User'}</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">{user?.role || 'Guest'}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">{user?.display_role || user?.role || 'Guest'}</p>
                                 </div>
                                 <div className="h-10 w-10 rounded-full bg-brand-100 dark:bg-brand-900 border-2 border-brand-500 flex items-center justify-center overflow-hidden hover:bg-brand-200 transition-colors">
                                     {user?.profile_photo_url ? (
@@ -264,7 +265,7 @@ const DashboardLayout = () => {
                                         </span>
                                     </div>
                                     <div className="py-1">
-                                        {user?.role === 'HOST' && (
+                                        {(user?.role === 'HOST' || user?.role === 'COMMITTEE_MEMBER') && (
                                             <Link to="/profile" className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-brand-600 flex items-center gap-2" onClick={() => setIsDropdownOpen(false)}>
                                                 <User size={16} /> My Profile
                                             </Link>

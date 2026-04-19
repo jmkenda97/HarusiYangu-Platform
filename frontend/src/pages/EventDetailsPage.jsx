@@ -90,7 +90,22 @@ const EventDetailsPage = () => {
     const canAccess = (permissionName) => {
         if (user?.role === 'SUPER_ADMIN') return true;
         if (user?.id === event?.owner_user_id) return true;
-        return user?.permissions?.includes(permissionName);
+        
+        // Find membership for THIS specific event
+        const membership = user?.committee_memberships?.find(m => m.event_id === id);
+        if (!membership) return false;
+
+        // Map frontend permission strings to the boolean flags in the DB
+        const permMap = {
+            'view-event-budget': membership.permissions.can_manage_budget,
+            'view-event-contributions': membership.permissions.can_manage_contributions,
+            'view-event-guests': membership.permissions.can_send_messages, // Guest management
+            'manage-event-vendors': membership.permissions.can_manage_vendors,
+            'scan-event-qr': membership.permissions.can_scan_cards,
+            'manage-event-committee': membership.committee_role === 'CHAIRPERSON'
+        };
+
+        return permMap[permissionName] || false;
     };
 
     useEffect(() => {
@@ -102,17 +117,17 @@ const EventDetailsPage = () => {
             setIsTabLoading(true);
             try {
                 if (activeTab === 'overview') {
-                    if (guests.length === 0 && canAccess('view-event-guests')) await fetchGuests();
-                    if (budgetItems.length === 0 && canAccess('view-event-budget')) await fetchBudget();
-                    await fetchVendors(); // Needed for overview stats
+                    if (canAccess('view-event-guests')) await fetchGuests();
+                    if (canAccess('view-event-budget')) await fetchBudget();
+                    if (canAccess('manage-event-vendors')) await fetchVendors();
                 } else if (activeTab === 'guests') {
                     if (canAccess('view-event-guests')) await fetchGuests();
                 } else if (activeTab === 'budget') {
                     if (canAccess('view-event-budget')) await fetchBudget();
                 } else if (activeTab === 'committee') {
-                    if (user?.id === event?.owner_user_id || canAccess('manage-event-committee')) await fetchCommittee();
+                    if (canAccess('manage-event-committee')) await fetchCommittee();
                 } else if (activeTab === 'vendors') {
-                    await fetchVendors();
+                    if (canAccess('manage-event-vendors')) await fetchVendors();
                 }
             } finally {
                 setIsTabLoading(false);
@@ -452,6 +467,8 @@ const EventDetailsPage = () => {
     );
     const filteredCommittee = committee.filter(c =>
         (c.user?.full_name && c.user.full_name.toLowerCase().includes(committeeSearch.toLowerCase())) ||
+        (c.user?.first_name && c.user.first_name.toLowerCase().includes(committeeSearch.toLowerCase())) ||
+        (c.user?.last_name && c.user.last_name.toLowerCase().includes(committeeSearch.toLowerCase())) ||
         (c.user?.phone && c.user.phone.includes(committeeSearch))
     );
 
@@ -481,9 +498,8 @@ const EventDetailsPage = () => {
     const isOverBudget = totalBudgetPlanned > (event?.target_budget || 0);
     const budgetProgressPercent = event?.target_budget > 0 ? (totalBudgetPlanned / event.target_budget) * 100 : 100;
 
-    if (loading) return <div className="text-center p-10">Loading Event Details...</div>;
-
-    const availableTabs = [
+    // --- DYNAMIC TAB FILTERING (ALL TABS BROO) ---
+    const availableTabs = useMemo(() => [
         { id: 'overview', label: 'Overview', icon: TrendingUp },
         { id: 'guests', label: 'Guests', icon: Users },
         { id: 'contributors', label: 'Finance', icon: Wallet },
@@ -491,14 +507,27 @@ const EventDetailsPage = () => {
         { id: 'vendors', label: 'Vendors', icon: Store },
         { id: 'committee', label: 'Committee', icon: Shield }
     ].filter(tab => {
+        if (tab.id === 'overview') return true; 
+
         if (tab.id === 'guests') return canAccess('view-event-guests');
         if (tab.id === 'contributors') return canAccess('view-event-contributions');
         if (tab.id === 'budget') return canAccess('view-event-budget');
-        if (tab.id === 'committee') return user?.id === event?.owner_user_id || canAccess('manage-event-committee');
-        return true;
-    });
+        if (tab.id === 'vendors') return canAccess('manage-event-vendors');
+        if (tab.id === 'committee') return canAccess('manage-event-committee');
+        return false;
+    }), [user, event, id]);
 
-    if (!availableTabs.find(t => t.id === activeTab)) setActiveTab(availableTabs[0].id);
+    // --- SECURITY REDIRECT: Ensure user doesn't stay on unauthorized tab ---
+    useEffect(() => {
+        if (!loading && event) {
+            const isTabAuthorized = availableTabs.some(t => t.id === activeTab);
+            if (!isTabAuthorized) {
+                setActiveTab('overview');
+            }
+        }
+    }, [activeTab, availableTabs, loading, event]);
+
+    if (loading) return <div className="text-center p-10">Loading Event Details...</div>;
 
     return (
         <div className="space-y-6">
@@ -544,59 +573,63 @@ const EventDetailsPage = () => {
             {/* Tab Content */}
             <div className="space-y-6 animate-in fade-in duration-300">
                 
-                {/* 1. OVERVIEW (StatCards from 260aee1 + Progress Bars from OLD) */}
+                {/* 1. OVERVIEW (CAREFULLY FILTERED STATS) */}
                 {activeTab === 'overview' && (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <StatCard title="Total Budget" value={formatCurrency(event.target_budget)} icon={Wallet} color="blue" />
-                            <StatCard title="Total Pledged" value={formatCurrency(totalPledged)} icon={TrendingUp} color="emerald" />
-                            <StatCard title="Collected" value={formatCurrency(totalPaid)} icon={CheckCircle} color="emerald" />
-                            <StatCard title="Total Guests" value={totalGuestsCount} icon={Users} color="purple" />
+                            {/* CAREFULLY FILTERED BUDGET STATS */}
+                            {canAccess('view-event-budget') && <StatCard title="Total Budget" value={formatCurrency(event.target_budget)} icon={Wallet} color="blue" />}
+                            {canAccess('view-event-contributions') && <StatCard title="Total Pledged" value={formatCurrency(totalPledged)} icon={TrendingUp} color="emerald" />}
+                            {canAccess('view-event-contributions') && <StatCard title="Collected" value={formatCurrency(totalPaid)} icon={CheckCircle} color="emerald" />}
+                            {canAccess('view-event-guests') && <StatCard title="Total Guests" value={totalGuestsCount} icon={Users} color="purple" />}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                                <div><p className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Contributors</p><p className="text-3xl font-bold text-brand-600 mt-1">{totalContributorsCount}</p><div className="flex items-center gap-2 mt-1"><span className="text-xs text-green-600 font-medium flex items-center gap-1"><CheckCircle size={10} /> {paidContributorsCount} Paid</span><span className="text-xs text-slate-400 font-medium flex items-center gap-1"><Clock size={10} /> {unpaidContributorsCount} Pending</span></div></div>
-                                <div className="p-4 bg-brand-50 dark:bg-brand-900/30 text-brand-600 rounded-full"><CreditCard size={28} /></div>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                                <div><p className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Outstanding</p><p className="text-3xl font-bold text-orange-600 mt-1">{formatCurrency(totalPledged - totalPaid)}</p><p className="text-xs text-slate-400 mt-1">To be collected</p></div>
-                                <div className="p-4 bg-orange-50 dark:bg-orange-900/30 text-orange-600 rounded-full"><AlertCircle size={28} /></div>
-                            </div>
+                            {canAccess('view-event-contributions') && (
+                                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+                                    <div><p className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Contributors</p><p className="text-3xl font-bold text-brand-600 mt-1">{totalContributorsCount}</p><div className="flex items-center gap-2 mt-1"><span className="text-xs text-green-600 font-medium flex items-center gap-1"><CheckCircle size={10} /> {paidContributorsCount} Paid</span><span className="text-xs text-slate-400 font-medium flex items-center gap-1"><Clock size={10} /> {unpaidContributorsCount} Pending</span></div></div>
+                                    <div className="p-4 bg-brand-50 dark:bg-brand-900/30 text-brand-600 rounded-full"><CreditCard size={28} /></div>
+                                </div>
+                            )}
+                            {canAccess('view-event-contributions') && (
+                                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+                                    <div><p className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Outstanding</p><p className="text-3xl font-bold text-orange-600 mt-1">{formatCurrency(totalPledged - totalPaid)}</p><p className="text-xs text-slate-400 mt-1">To be collected</p></div>
+                                    <div className="p-4 bg-orange-50 dark:bg-orange-900/30 text-orange-600 rounded-full"><AlertCircle size={28} /></div>
+                                </div>
+                            )}
                             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
                                 <div><p className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Days Remaining</p><p className={`text-3xl font-bold mt-1 ${daysRemaining < 30 ? 'text-red-600' : 'text-blue-600'}`}>{daysRemaining}</p><p className="text-xs text-slate-400 mt-1">Until Event Date</p></div>
                                 <div className={`p-4 rounded-full ${daysRemaining < 30 ? 'bg-red-50 dark:bg-red-900/30 text-red-600' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600'}`}><Calendar size={28} /></div>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-widest text-[10px]">Collection Rate</span>
-                                    <span className="text-sm font-bold text-slate-900 dark:text-white">{totalPledged > 0 ? ((totalPaid / totalPledged) * 100).toFixed(1) : 0}%</span>
-                                </div>
-                                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
-                                    <div className="bg-brand-600 h-3 rounded-full transition-all duration-500" style={{ width: `${totalPledged > 0 ? (totalPaid / totalPledged) * 100 : 0}%` }}></div>
-                                </div>
-                                <div className="flex justify-between text-[10px] text-slate-400 font-bold uppercase mt-2 tracking-tighter">
-                                    <span>Collected: {formatCurrency(totalPaid)}</span>
-                                    <span>Target: {formatCurrency(totalPledged)}</span>
-                                </div>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-widest text-[10px] block mb-3">Payment Distribution</span>
-                                <div className="space-y-3">
-                                    <div>
-                                        <div className="flex justify-between text-[10px] font-bold uppercase mb-1"><span className="text-slate-400">Paid Contributors</span><span className="text-green-600">{paidContributorsCount}</span></div>
-                                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2"><div className="bg-green-500 h-2 rounded-full" style={{ width: `${totalContributorsCount > 0 ? (paidContributorsCount / totalContributorsCount) * 100 : 0}%` }}></div></div>
+                        {/* PROGRESS BARS ISOLATION */}
+                        {(canAccess('view-event-contributions') || canAccess('view-event-budget')) && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {canAccess('view-event-contributions') && (
+                                    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-widest text-[10px]">Collection Rate</span>
+                                            <span className="text-sm font-bold text-slate-900 dark:text-white">{totalPledged > 0 ? ((totalPaid / totalPledged) * 100).toFixed(1) : 0}%</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
+                                            <div className="bg-brand-600 h-3 rounded-full transition-all duration-500" style={{ width: `${totalPledged > 0 ? (totalPaid / totalPledged) * 100 : 0}%` }}></div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div className="flex justify-between text-[10px] font-bold uppercase mb-1"><span className="text-slate-400">Unpaid/Pending</span><span className="text-orange-600">{unpaidContributorsCount}</span></div>
-                                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2"><div className="bg-orange-500 h-2 rounded-full" style={{ width: `${totalContributorsCount > 0 ? (unpaidContributorsCount / totalContributorsCount) * 100 : 0}%` }}></div></div>
+                                )}
+                                {canAccess('view-event-budget') && (
+                                    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-widest text-[10px]">Budget Utilization</span>
+                                            <span className={`text-sm font-bold ${isOverBudget ? 'text-red-600' : 'text-emerald-600'}`}>{budgetProgressPercent.toFixed(1)}%</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
+                                            <div className={`h-3 rounded-full transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(budgetProgressPercent, 100)}%` }}></div>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
 
@@ -1026,8 +1059,35 @@ const EventDetailsPage = () => {
                             {!editingCommitteeMember && (
                                 <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Phone</label><input required type="text" className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-2xl px-6 py-4 outline-none font-bold" value={committeeForm.phone} onChange={e => setCommitteeForm({ ...committeeForm, phone: e.target.value })} /></div>
                             )}
-                            <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Assigned Role</label><select required className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-2xl px-6 py-4 font-bold outline-none" value={committeeForm.committee_role} onChange={e => setCommitteeForm({ ...committeeForm, committee_role: e.target.value })}><option value="MEMBER">Committee Member</option><option value="CHAIRPERSON">Chairperson</option><option value="SECRETARY">Secretary</option><option value="TREASURER">Treasurer</option><option value="COORDINATOR">Coordinator</option></select></div>
-                            <div className="pt-6"><button type="submit" disabled={isSubmitting} className="w-full bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-xl shadow-brand-500/30 flex items-center justify-center gap-3"><Shield size={20} /> Save Assignment</button></div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Assigned Role</label>
+                                <select 
+                                    required 
+                                    className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-2xl px-6 py-4 font-bold outline-none mb-4" 
+                                    value={committeeForm.committee_role} 
+                                    onChange={e => setCommitteeForm({ ...committeeForm, committee_role: e.target.value })}
+                                >
+                                    <option value="MEMBER">Committee Member</option>
+                                    <option value="CHAIRPERSON">Chairperson</option>
+                                    <option value="SECRETARY">Secretary</option>
+                                    <option value="TREASURER">Treasurer</option>
+                                    <option value="COORDINATOR">Coordinator</option>
+                                    <option value="GATE_OFFICER">Gate Officer (Scanner)</option>
+                                </select>
+
+                                {/* ROLE SUMMARY BOX */}
+                                <div className="p-4 bg-brand-50/50 dark:bg-brand-900/10 border border-brand-100 dark:border-brand-800/50 rounded-xl">
+                                    <p className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-widest mb-1">Role Summary</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed italic">
+                                        {committeeForm.committee_role === 'CHAIRPERSON' && "Full access to all event modules, including budget, guests, and committee management."}
+                                        {committeeForm.committee_role === 'TREASURER' && "Can view budget, track contributions, and record guest payments."}
+                                        {committeeForm.committee_role === 'SECRETARY' && "Can manage guest lists, view contributions, and handle invitations."}
+                                        {committeeForm.committee_role === 'COORDINATOR' && "Can view vendors and guests to coordinate event logistics."}
+                                        {committeeForm.committee_role === 'GATE_OFFICER' && "Strictly restricted to scanning guest QR codes at the event entrance."}
+                                        {committeeForm.committee_role === 'MEMBER' && "Standard member with view-only access to basic event information."}
+                                    </p>
+                                </div>
+                            </div>                            <div className="pt-6"><button type="submit" disabled={isSubmitting} className="w-full bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-xl shadow-brand-500/30 flex items-center justify-center gap-3"><Shield size={20} /> Save Assignment</button></div>
                         </form>
                     </div>
                 </div>

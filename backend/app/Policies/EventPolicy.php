@@ -21,36 +21,62 @@ class EventPolicy
     public function viewBudget(User $user, Event $event)
     {
         if ($user->id === $event->owner_user_id) return true;
-        return $user->hasPermissionTo('view-event-budget');
+        
+        return $event->committee()
+            ->where('user_id', $user->id)
+            ->where('can_manage_budget', true)
+            ->exists();
     }
 
     public function manageGuests(User $user, Event $event)
     {
         if ($user->id === $event->owner_user_id) return true;
-        return $user->hasPermissionTo('view-event-guests');
+        
+        return $event->committee()
+            ->where('user_id', $user->id)
+            ->where('can_send_messages', true) // Maps to Guest list / Messaging access
+            ->exists();
     }
 
     public function manageContributions(User $user, Event $event)
     {
         if ($user->id === $event->owner_user_id) return true;
-        return $user->hasPermissionTo('view-event-contributions');
+        
+        return $event->committee()
+            ->where('user_id', $user->id)
+            ->where('can_manage_contributions', true)
+            ->exists();
     }
 
     public function scanEvent(User $user, Event $event)
     {
         if ($user->id === $event->owner_user_id) return true;
-        return $user->hasPermissionTo('scan-event-qr');
+        
+        return $event->committee()
+            ->where('user_id', $user->id)
+            ->where('can_scan_cards', true)
+            ->exists();
     }
 
     public function manageVendors(User $user, Event $event)
     {
         if ($user->id === $event->owner_user_id) return true;
-        return $user->hasPermissionTo('manage-event-vendors');
+        
+        return $event->committee()
+            ->where('user_id', $user->id)
+            ->where('can_manage_vendors', true)
+            ->exists();
     }
 
     public function update(User $user, Event $event)
     {
-        return $user->id === $event->owner_user_id;
+        if ($user->id === $event->owner_user_id) return true;
+
+        // Chairpersons can also update event basic details
+        return $event->committee()
+            ->where('user_id', $user->id)
+            ->where('committee_role', 'CHAIRPERSON')
+            ->exists();
     }
 
     public function delete(User $user, Event $event)
@@ -58,14 +84,14 @@ class EventPolicy
         return $user->id === $event->owner_user_id;
     }
 
-        public function manageCommittee(User $user, Event $event)
+    public function manageCommittee(User $user, Event $event)
     {
-        // The owner can always manage the committee
-        if ($user->id === $event->owner_user_id) {
-            return true;
-        }
+        if ($user->id === $event->owner_user_id) return true;
 
-        // Others (like Coordinators) need specific permission
-        return $user->hasPermissionTo('manage-event-committee');
+        // Only Chairpersons can manage other committee members
+        return $event->committee()
+            ->where('user_id', $user->id)
+            ->where('committee_role', 'CHAIRPERSON')
+            ->exists();
     }
 }

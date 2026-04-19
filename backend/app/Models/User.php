@@ -70,6 +70,21 @@ class User extends Authenticatable
         return $this->password_hash;
     }
 
+    public function getDisplayRole()
+    {
+        if ($this->role === 'SUPER_ADMIN') return 'System Administrator';
+        if ($this->role === 'HOST') return 'Event Host';
+        if ($this->role === 'VENDOR') return 'Vendor Partner';
+
+        // Check if user has committee memberships
+        $membership = $this->committeeMemberships()->latest()->first();
+        if ($membership) {
+            return ucfirst(strtolower(str_replace('_', ' ', $membership->committee_role)));
+        }
+
+        return 'Guest';
+    }
+
     // --- PHASE 2 RELATIONSHIPS ---
 
     public function ownedEvents()

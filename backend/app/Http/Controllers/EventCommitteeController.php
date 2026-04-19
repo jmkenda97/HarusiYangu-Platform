@@ -95,22 +95,13 @@ class EventCommitteeController extends Controller
                 ]
             );
 
-            // 5. Assign Base Spatie Role (Gate Officer vs generic Member)
+            // 5. Assign Base Spatie Role (For high-level authorization)
             if (!$user->hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'HOST'])) {
                 $spatieRole = ($request->committee_role === 'GATE_OFFICER') ? 'GATE_OFFICER' : 'COMMITTEE_MEMBER';
                 $user->assignRole($spatieRole);
             }
 
-            // 6. Assign Specific Permissions based on the Role
-            $permissionNames = $this->getPermissionsForRole($request->committee_role);
-
-            foreach ($permissionNames as $permName) {
-                if (!$user->hasPermissionTo($permName)) {
-                    $user->givePermissionTo($permName);
-                }
-            }
-
-            // 7. Check for duplicates (User already in this event's committee)
+            // 6. Check for duplicates (User already in this event's committee)
             $existing = EventCommitteeMember::where('event_id', $eventId)
                 ->where('user_id', $user->id)
                 ->first();
@@ -119,18 +110,23 @@ class EventCommitteeController extends Controller
                 return response()->json(['message' => 'User is already a committee member.'], 409);
             }
 
+            // 7. Define Role Flags (Zero-Leakage Model)
+            $role = $request->committee_role;
+            $flags = [
+                'can_manage_budget' => in_array($role, ['CHAIRPERSON', 'TREASURER']),
+                'can_manage_contributions' => in_array($role, ['CHAIRPERSON', 'TREASURER', 'SECRETARY']),
+                'can_send_messages' => in_array($role, ['CHAIRPERSON', 'SECRETARY', 'COORDINATOR']),
+                'can_manage_vendors' => in_array($role, ['CHAIRPERSON', 'COORDINATOR']),
+                'can_scan_cards' => in_array($role, ['CHAIRPERSON', 'GATE_OFFICER']),
+            ];
+
             // 8. CREATE MEMBER RECORD
-            $member = EventCommitteeMember::create([
+            $member = EventCommitteeMember::create(array_merge([
                 'event_id' => $eventId,
                 'user_id' => $user->id,
-                'committee_role' => $request->committee_role,
-                'can_manage_budget' => in_array('view-event-budget', $permissionNames),
-                'can_manage_contributions' => in_array('view-event-contributions', $permissionNames),
-                'can_send_messages' => in_array('view-event-guests', $permissionNames),
-                'can_manage_vendors' => in_array('manage-event-vendors', $permissionNames),
-                'can_scan_cards' => in_array('scan-event-qr', $permissionNames),
+                'committee_role' => $role,
                 'added_by' => auth()->id(),
-            ]);
+            ], $flags));
 
             return response()->json(['data' => $member], 201);
         });
@@ -141,8 +137,6 @@ class EventCommitteeController extends Controller
         // 1. Validate Request
         $request->validate([
             'committee_role' => 'required|in:CHAIRPERSON,SECRETARY,TREASURER,COORDINATOR,MEMBER,GATE_OFFICER',
-            // Note: We do not accept manual permission checkboxes anymore,
-            // permissions are derived strictly from the committee_role.
         ]);
 
         // 2. Fetch Member and Event
@@ -156,34 +150,22 @@ class EventCommitteeController extends Controller
         $this->authorize('manageCommittee', $event);
 
         $user = $member->user;
+        $role = $request->committee_role;
 
-        // 4. Get New Permissions based on the NEW Role
-        $newPermissions = $this->getPermissionsForRole($request->committee_role);
-
-        // 5. UPDATE USER PERMISSIONS
-        // We simply ensure the user HAS the new permissions.
-        // We DO NOT revoke old permissions because the user might have those permissions
-        // from OTHER events (e.g. Treasurer for Event A, but we are updating them in Event B).
-        foreach ($newPermissions as $permName) {
-            if (!$user->hasPermissionTo($permName)) {
-                $user->givePermissionTo($permName);
-            }
-        }
-
-        // 6. Update Spatie Base Role if necessary
-        $targetRole = ($request->committee_role === 'GATE_OFFICER') ? 'GATE_OFFICER' : 'COMMITTEE_MEMBER';
+        // 4. Update Spatie Base Role if necessary
+        $targetRole = ($role === 'GATE_OFFICER') ? 'GATE_OFFICER' : 'COMMITTEE_MEMBER';
         if (!$user->hasRole($targetRole)) {
             $user->assignRole($targetRole);
         }
 
-        // 7. Update Committee Member Record
+        // 5. Update Committee Member Record with Role Flags
         $member->update([
-            'committee_role' => $request->committee_role,
-            'can_manage_budget' => in_array('view-event-budget', $newPermissions),
-            'can_manage_contributions' => in_array('view-event-contributions', $newPermissions),
-            'can_send_messages' => in_array('view-event-guests', $newPermissions),
-            'can_manage_vendors' => in_array('manage-event-vendors', $newPermissions),
-            'can_scan_cards' => in_array('scan-event-qr', $newPermissions),
+            'committee_role' => $role,
+            'can_manage_budget' => in_array($role, ['CHAIRPERSON', 'TREASURER']),
+            'can_manage_contributions' => in_array($role, ['CHAIRPERSON', 'TREASURER', 'SECRETARY']),
+            'can_send_messages' => in_array($role, ['CHAIRPERSON', 'SECRETARY', 'COORDINATOR']),
+            'can_manage_vendors' => in_array($role, ['CHAIRPERSON', 'COORDINATOR']),
+            'can_scan_cards' => in_array($role, ['CHAIRPERSON', 'GATE_OFFICER']),
         ]);
 
         return response()->json(['data' => $member]);
