@@ -72,7 +72,12 @@ class VendorInquiryController extends Controller
                 $vendor->user,
                 "New Inquiry: " . $event->event_name,
                 "You have received a new inquiry for " . $request->assigned_service . ". Host is looking for a quote.",
-                ['icon' => 'MessageSquare', 'event_id' => $eventId, 'booking_id' => $inquiry->id],
+                [
+                    'icon' => 'MessageSquare', 
+                    'event_id' => $eventId, 
+                    'booking_id' => $inquiry->id,
+                    'link' => '/vendor/dashboard'
+                ],
                 auth()->user()
             );
 

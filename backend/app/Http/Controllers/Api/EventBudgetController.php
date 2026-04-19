@@ -22,9 +22,28 @@ class EventBudgetController extends Controller
         //$this->authorize('viewBudget', $event);
 
         $items = EventBudgetItem::where('event_id', $eventId)
-            ->with('category')
+            ->with(['category', 'vendorAssignment']) // Load vendorAssignment to check status
             ->orderBy('created_at', 'desc')
             ->get();
+
+        // --- AUTO-CORRECTION BRAIN: Sync Status with Financial Reality ---
+        foreach ($items as $item) {
+            $contract = $item->vendorAssignment;
+            if ($contract) {
+                $newStatus = $item->budget_item_status;
+
+                if ($contract->status === 'ACCEPTED') {
+                    $newStatus = ($contract->amount_paid > 0) ? 'IN_PROGRESS' : 'APPROVED';
+                } elseif ($contract->status === 'COMPLETED') {
+                    $newStatus = 'PAID';
+                }
+
+                // Only update if different to save performance
+                if ($newStatus !== $item->budget_item_status) {
+                    $item->update(['budget_item_status' => $newStatus]);
+                }
+            }
+        }
 
         // Also fetch categories for the form
         $categories = BudgetCategory::all();

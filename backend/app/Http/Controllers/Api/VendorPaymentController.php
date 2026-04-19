@@ -132,6 +132,11 @@ class VendorPaymentController extends Controller
             $booking->increment('amount_paid', $request->amount);
             $booking->decrement('balance_due', $request->amount);
 
+            // NEW: Auto-transition Budget Item Status to IN_PROGRESS
+            if ($booking->budgetItem) {
+                $booking->budgetItem->update(['budget_item_status' => 'IN_PROGRESS']);
+            }
+
             // 5. Write to Ledger (Perfect Traceability)
             WalletLedgerEntry::create([
                 'id' => (string) Str::uuid(),
@@ -157,7 +162,12 @@ class VendorPaymentController extends Controller
                 $booking->vendor->user,
                 "Payment Received: " . formatCurrency($request->amount),
                 "A payment of " . formatCurrency($request->amount) . " has been recorded for " . $booking->event->event_name . " (" . $request->milestone . ").",
-                ['icon' => 'DollarSign', 'event_id' => $booking->event_id, 'booking_id' => $booking->id],
+                [
+                    'icon' => 'DollarSign', 
+                    'event_id' => $booking->event_id, 
+                    'booking_id' => $booking->id,
+                    'link' => '/vendor/dashboard'
+                ],
                 auth()->user()
             );
 

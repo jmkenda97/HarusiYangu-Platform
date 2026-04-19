@@ -834,11 +834,13 @@ const EventDetailsPage = () => {
                                                 <td className="px-6 py-4 text-right font-bold text-slate-900 dark:text-white">{formatCurrency(item.estimated_cost)}</td>
                                                 <td className="px-6 py-4 text-right text-slate-400">{formatCurrency(item.actual_cost)}</td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <select value={item.budget_item_status} onChange={(e) => handleStatusChange(item.id, e.target.value)} className={`text-[10px] font-black px-2 py-1 rounded border-0 cursor-pointer focus:ring-2 focus:ring-brand-500 uppercase tracking-tighter ${item.budget_item_status === 'PAID' ? 'bg-emerald-50 text-emerald-700' : item.budget_item_status === 'CANCELLED' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
-                                                        <option value="PLANNED">PLANNED</option><option value="APPROVED">APPROVED</option><option value="IN_PROGRESS">IN PROGRESS</option><option value="PAID">PAID</option><option value="CANCELLED">CANCELLED</option>
-                                                    </select>
-                                                </td>
-                                                <td className="px-6 py-4 text-right"><div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditBudget(item)} className="p-2 text-slate-400 hover:text-brand-600 transition-colors"><Edit size={16} /></button><button onClick={() => handleDeleteBudget(item.id)} className="p-2 text-slate-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button></div></td>
+                                                    <span 
+                                                       title="Status managed automatically by system movements"
+                                                       className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border ${item.budget_item_status === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : item.budget_item_status === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}
+                                                    >
+                                                        {item.budget_item_status.replace('_', ' ')}
+                                                    </span>
+                                                </td>                                                <td className="px-6 py-4 text-right"><div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditBudget(item)} className="p-2 text-slate-400 hover:text-brand-600 transition-colors"><Edit size={16} /></button><button onClick={() => handleDeleteBudget(item.id)} className="p-2 text-slate-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button></div></td>
                                             </tr>
                                         ))}
                                     </tbody>

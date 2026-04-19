@@ -96,7 +96,12 @@ class EventBookingController extends Controller
             $booking->event->owner,
             "New Quote Received",
             $booking->vendor->business_name . " has sent a quote of TZS " . number_format($request->quote_amount) . " for your event.",
-            ['icon' => 'DollarSign', 'event_id' => $booking->event_id, 'booking_id' => $booking->id],
+            [
+                'icon' => 'DollarSign', 
+                'event_id' => $booking->event_id, 
+                'booking_id' => $booking->id,
+                'link' => "/events/{$booking->event_id}?tab=vendors"
+            ],
             auth()->user()
         );
 
@@ -125,7 +130,8 @@ class EventBookingController extends Controller
             // Sync with Budget Item
             if ($booking->budgetItem) {
                 $booking->budgetItem->update([
-                    'actual_cost' => $booking->last_quote_amount
+                    'actual_cost' => $booking->last_quote_amount,
+                    'budget_item_status' => 'APPROVED' // Auto-transition
                 ]);
             }
 
@@ -134,7 +140,12 @@ class EventBookingController extends Controller
                 $booking->vendor->user,
                 "Quote Accepted!",
                 "Great news! Your quote for " . $booking->event->event_name . " has been accepted. You are now officially booked.",
-                ['icon' => 'CheckCircle', 'event_id' => $booking->event_id, 'booking_id' => $booking->id],
+                [
+                    'icon' => 'CheckCircle', 
+                    'event_id' => $booking->event_id, 
+                    'booking_id' => $booking->id,
+                    'link' => '/vendor/dashboard'
+                ],
                 auth()->user()
             );
 
@@ -166,6 +177,11 @@ class EventBookingController extends Controller
             // 1. Update Booking Status
             $booking->update(['status' => 'COMPLETED']);
 
+            // NEW: Auto-transition Budget Item Status to PAID
+            if ($booking->budgetItem) {
+                $booking->budgetItem->update(['budget_item_status' => 'PAID']);
+            }
+
             // 2. Identify unreleased payments (held in pending_balance)
             $unreleasedPayments = \App\Models\VendorPayment::where('event_vendor_id', $bookingId)
                 ->where('is_released', false)
@@ -192,7 +208,12 @@ class EventBookingController extends Controller
                 $booking->vendor->user,
                 "Service Confirmed! Funds Released",
                 "The host of " . $booking->event->event_name . " has confirmed receipt of your service. Your remaining balance has been moved to your available balance.",
-                ['icon' => 'Award', 'event_id' => $booking->event_id, 'booking_id' => $booking->id],
+                [
+                    'icon' => 'Award', 
+                    'event_id' => $booking->event_id, 
+                    'booking_id' => $booking->id,
+                    'link' => '/vendor/dashboard'
+                ],
                 auth()->user()
             );
 
