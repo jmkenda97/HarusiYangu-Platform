@@ -299,8 +299,8 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {/* 4. COMMITTEE VIEWS (REPLACED FOR PERFECT ROLE ISOLATION) */}
-        {committeeProfile && (
+        {/* 4. COMMITTEE VIEWS (FIXED TO PREVENT DOUBLE DASHBOARD FOR HOSTS) */}
+        {committeeProfile && (user?.role === 'COMMITTEE_MEMBER' || user?.role === 'GATE_OFFICER') && (
            <div className="space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>

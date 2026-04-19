@@ -81,6 +81,7 @@ const EventDetailsPage = () => {
         first_name: '', last_name: '', phone: '', committee_role: 'MEMBER'
     });
     const [editingCommitteeMember, setEditingCommitteeMember] = useState(null);
+    const [committeeResult, setCommitteeResult] = useState(null);
 
     // --- BULK IMPORT STATES ---
     const [importFile, setImportFile] = useState(null);
@@ -274,6 +275,14 @@ const EventDetailsPage = () => {
         }
     };
 
+    // --- AUTO-CLEAR COMMITTEE MESSAGES ---
+    useEffect(() => {
+        if (committeeResult) {
+            const timer = setTimeout(() => setCommitteeResult(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [committeeResult]);
+
     const handleSaveCommittee = async (e) => {
         e.preventDefault();
         if (isSubmitting) return;
@@ -281,14 +290,18 @@ const EventDetailsPage = () => {
         try {
             if (editingCommitteeMember) {
                 await api.put(`/events/${id}/committee/${editingCommitteeMember.id}`, committeeForm);
+                setCommitteeResult({ type: 'success', message: "Committee member role updated successfully!" });
             } else {
                 await api.post(`/events/${id}/committee`, committeeForm);
+                setCommitteeResult({ type: 'success', message: "Committee member added successfully!" });
             }
             setShowCommitteeModal(false);
             setCommitteeForm({ first_name: '', last_name: '', phone: '', committee_role: 'MEMBER' });
             setEditingCommitteeMember(null);
             fetchCommittee();
-        } catch (err) { alert(err.response?.data?.message || "Failed to save committee member"); }
+        } catch (err) { 
+            setCommitteeResult({ type: 'error', message: err.response?.data?.message || "Failed to save committee member" });
+        }
         finally { setIsSubmitting(false); }
     };
 
@@ -308,8 +321,11 @@ const EventDetailsPage = () => {
         try {
             await api.delete(`/events/${id}/committee/${memberId}`);
             fetchCommittee();
+            setCommitteeResult({ type: 'success', message: "Member removed from committee successfully." });
         }
-        catch (err) { alert(err.response?.data?.message || "Failed to remove member"); }
+        catch (err) { 
+            setCommitteeResult({ type: 'error', message: "Failed to remove member" });
+        }
     };
 
     const handleDownloadTemplate = () => {
@@ -919,6 +935,18 @@ const EventDetailsPage = () => {
                             </div>
                             <button onClick={() => { setEditingCommitteeMember(null); setCommitteeForm({ first_name: '', last_name: '', phone: '', committee_role: 'MEMBER' }); setShowCommitteeModal(true); }} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm hover:bg-brand-700 transition-all"><Plus size={16} /> Add Member</button>
                         </div>
+
+                        {/* COMMITTEE FEEDBACK BANNER */}
+                        {committeeResult && (
+                            <div className={`p-4 rounded-xl border animate-in zoom-in duration-300 flex items-center justify-between ${committeeResult.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                                <div className="flex items-center gap-3">
+                                    {committeeResult.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
+                                    <p className="text-sm font-bold">{committeeResult.message}</p>
+                                </div>
+                                <button onClick={() => setCommitteeResult(null)} className="p-1 hover:bg-black/5 rounded-full"><X size={16}/></button>
+                            </div>
+                        )}
+
                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left text-sm text-slate-600">
