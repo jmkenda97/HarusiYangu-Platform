@@ -15,7 +15,6 @@ export const AuthProvider = ({ children }) => {
     });
     const [loading, setLoading] = useState(false); // Changed to false - no need to wait
 
-    
     // OPTIMIZATION: Verify token on mount (faster than before)
     useEffect(() => {
         const token = localStorage.getItem('harusiyangu_token');
