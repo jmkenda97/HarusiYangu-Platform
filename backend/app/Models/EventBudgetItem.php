@@ -45,4 +45,12 @@ class EventBudgetItem extends Model
     {
         return $this->belongsTo(BudgetCategory::class, 'category_id');
     }
+
+    /**
+     * Link to the vendor assigned to this budget item
+     */
+    public function vendorAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(EventVendor::class, 'budget_item_id');
+    }
 }

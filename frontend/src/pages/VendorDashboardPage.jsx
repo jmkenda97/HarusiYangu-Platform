@@ -6,7 +6,7 @@ import {
     Building2, Package, FileText, Calendar, DollarSign, ArrowRight,
     CheckCircle, Clock, FileCheck, FileX, Loader2, AlertCircle,
     Briefcase, Wallet, TrendingUp, Activity, X, User, Users, Star, MessageSquare,
-    ChevronLeft, ChevronRight
+    ChevronLeft, ChevronRight, Shield, Download
 } from 'lucide-react';
 import { SkeletonCard, PageLoader } from '../components/SkeletonLoader';
 

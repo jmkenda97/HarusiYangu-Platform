@@ -96,10 +96,16 @@ const EventDetailsPage = () => {
     // --- PROFESSIONAL DOCUMENT MODAL ---
     const [selectedDoc, setSelectedDoc] = useState(null);
 
-    const ProfessionalDocumentModal = ({ doc, onClose }) => {
-        if (!doc) return null;
-        return (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-md" onClick={onClose}>
+    const ProfessionalDocumentModal = ({ doc, event, onClose }) => {
+    if (!doc) return null;
+    
+    // Internal formatter for professional standard
+    const internalFormat = (amount) => {
+        return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS' }).format(amount || 0);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/90 p-4 backdrop-blur-md" onClick={onClose}>
                 <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col" onClick={e => e.stopPropagation()}>
                     {/* DOC HEADER */}
                     <div className="p-8 border-b border-slate-100 flex justify-between items-start">
@@ -230,7 +236,10 @@ const EventDetailsPage = () => {
                     if (canAccess('manage-event-vendors')) await fetchVendors();
                 } else if (activeTab === 'contributors') {
                     if (canAccess('view-event-contributions')) {
-                        await fetchGuests(); // Needed for contributors list
+                        await fetchGuests();
+                    }
+                } else if (activeTab === 'finance') {
+                    if (canAccess('view-event-contributions')) {
                         await fetchLedger();
                     }
                 }
@@ -512,16 +521,34 @@ const EventDetailsPage = () => {
     };
 
     const openInvoice = (entry) => {
+        if (!entry) return;
+
+        // --- DEEP DATA SEARCH BROO ---
+        // 1. Try to find name in metadata
+        // 2. Try to find name in description (e.g. "Contribution from John")
+        // 3. Fallback to Event Owner
+        let recipient = entry.metadata?.contact_name || entry.metadata?.vendor_name;
+        
+        if (!recipient && entry.description?.includes('from ')) {
+            recipient = entry.description.split('from ')[1].split(' via')[0];
+        }
+
+        if (!recipient) {
+            recipient = event?.owner?.first_name ? (event.owner.first_name + ' ' + (event.owner.last_name || '')) : 'Verified Member';
+        }
+
+        const sourceTypeLabel = (entry.source_type || 'Transaction').replace(/_/g, ' ');
+
         setSelectedDoc({
             type: entry.entry_type === 'CREDIT' ? 'Payment Receipt' : 'Expense Invoice',
-            ref_number: `INV-${entry.id.substring(0, 8).toUpperCase()}`,
-            recipient_name: entry.entry_type === 'CREDIT' ? event.owner?.first_name + ' ' + event.owner?.last_name : entry.metadata?.vendor_name || 'Service Provider',
-            recipient_contact: entry.entry_type === 'CREDIT' ? 'Verified Contributor' : 'HarusiYangu Verified Vendor',
-            service_name: entry.description,
-            description: `Financial transaction recorded via ${entry.source_type.replace('_', ' ')}`,
-            amount: entry.amount,
+            ref_number: `REF-${(entry.id || '0000').substring(0, 8).toUpperCase()}`,
+            recipient_name: recipient,
+            recipient_contact: entry.entry_type === 'CREDIT' ? 'Platform Contributor' : 'Service Provider',
+            service_name: entry.description || 'Verified Financial Movement',
+            description: `This transaction was successfully processed and verified via ${sourceTypeLabel}.`,
+            amount: entry.amount || 0,
             is_paid: true,
-            notes: `Internal Receipt: ${entry.source_id.substring(0, 12).toUpperCase()}. This transaction has been verified by the HarusiYangu Escrow System.`
+            notes: `Internal Trace ID: ${(entry.source_id || 'N/A').substring(0, 12).toUpperCase()}. This document is a computer-generated summary of the verified ledger entry.`
         });
     };
 
@@ -650,21 +677,22 @@ const EventDetailsPage = () => {
     const availableTabs = useMemo(() => [
         { id: 'overview', label: 'Overview', icon: TrendingUp },
         { id: 'guests', label: 'Guests', icon: Users },
-        { id: 'contributors', label: 'Finance', icon: Wallet },
+        { id: 'contributors', label: 'Contributors', icon: Users },
+        { id: 'finance', label: 'Finance', icon: Wallet },
         { id: 'budget', label: 'Budget', icon: DollarSign },
         { id: 'vendors', label: 'Vendors', icon: Store },
         { id: 'committee', label: 'Committee', icon: Shield }
     ].filter(tab => {
-        if (tab.id === 'overview') return true; 
+        if (tab.id === 'overview') return true;
 
         if (tab.id === 'guests') return canAccess('view-event-guests');
         if (tab.id === 'contributors') return canAccess('view-event-contributions');
+        if (tab.id === 'finance') return canAccess('view-event-contributions');
         if (tab.id === 'budget') return canAccess('view-event-budget');
         if (tab.id === 'vendors') return canAccess('manage-event-vendors');
         if (tab.id === 'committee') return canAccess('manage-event-committee');
         return false;
     }), [user, event, id]);
-
     // --- SECURITY REDIRECT: Ensure user doesn't stay on unauthorized tab ---
     useEffect(() => {
         if (!loading && event) {
@@ -871,13 +899,29 @@ const EventDetailsPage = () => {
                     </div>
                 )}
 
-                {/* 3. CONTRIBUTORS */}
+                {/* 3. CONTRIBUTORS TAB (Restored Guests + Pledges) */}
                 {activeTab === 'contributors' && (
                     <div className="space-y-4 animate-in fade-in duration-300">
+                        {/* --- CONTRIBUTOR SUMMARY STATS --- */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Pledged</p>
+                                <p className="text-xl font-black text-slate-900 dark:text-white">{formatCurrency(totalPledged)}</p>
+                            </div>
+                            <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-800/50 shadow-sm">
+                                <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Total Collected</p>
+                                <p className="text-xl font-black text-emerald-700 dark:text-emerald-300">{formatCurrency(totalPaid)}</p>
+                            </div>
+                            <div className="bg-orange-50/50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-100 dark:border-orange-800/50 shadow-sm">
+                                <p className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-1">Outstanding</p>
+                                <p className="text-xl font-black text-orange-700 dark:text-orange-300">{formatCurrency(totalPledged - totalPaid)}</p>
+                            </div>
+                        </div>
+
                         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                             <div className="relative flex-1">
                                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                                <input type="text" placeholder="Search contributors..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={contributorSearch} onChange={e => {setContributorSearch(e.target.value); setContributorPage(1);}} />
+                                <input type="text" placeholder="Search contributors by name..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={contributorSearch} onChange={e => {setContributorSearch(e.target.value); setContributorPage(1);}} />
                             </div>
                             <div className="flex items-center gap-2">
                                 <button onClick={() => handleAuthenticatedDownload(`/events/${id}/contributors/export`, `contributors_${event.event_name}.xlsx`)} className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><FileSpreadsheet size={14} /> Export</button>
@@ -888,78 +932,119 @@ const EventDetailsPage = () => {
                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left text-sm text-slate-600">
-                                    {/* ... rest of contributors table ... */}
+                                    <thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase font-bold text-slate-500 tracking-wider border-b border-slate-100 dark:border-slate-800">
+                                        <tr>
+                                            <th className="px-6 py-4 w-12 text-center">#</th>
+                                            <th className="px-6 py-4">Name</th>
+                                            <th className="px-6 py-4 text-right">Pledged</th>
+                                            <th className="px-6 py-4 text-right">Paid</th>
+                                            <th className="px-6 py-4 text-right">Outstanding</th>
+                                            <th className="px-6 py-4 text-center">Status</th>
+                                            <th className="px-6 py-4 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                        {isTabLoading ? <tr><td colSpan="7" className="px-6 py-12 text-center text-slate-400 italic">Loading list...</td></tr> : displayedContributors.length === 0 ? <tr><td colSpan="7" className="px-6 py-12 text-center text-slate-400 italic">No contributors found.</td></tr> : displayedContributors.map((contact, index) => {
+                                            const pledge = contact.pledge;
+                                            let statusBadge = <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600">Pledged</span>;
+                                            if (pledge.contribution_status === 'PARTIALLY_PAID') statusBadge = <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-100">Partial</span>;
+                                            if (pledge.contribution_status === 'PAID') statusBadge = <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-100">Paid</span>;
+                                            return (
+                                                <tr key={contact.id} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="px-6 py-4 text-center text-slate-300 font-mono text-xs">{(contributorPage - 1) * itemsPerPage + index + 1}</td>
+                                                    <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">{contact.full_name}</td>
+                                                    <td className="px-6 py-4 text-right font-medium">{formatCurrency(pledge.pledge_amount)}</td>
+                                                    <td className="px-6 py-4 text-right font-bold text-emerald-600">{formatCurrency(pledge.amount_paid)}</td>
+                                                    <td className="px-6 py-4 text-right font-bold text-orange-600">{formatCurrency(pledge.outstanding_amount)}</td>
+                                                    <td className="px-6 py-4 text-center">{statusBadge}</td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        {pledge.contribution_status !== 'PAID' && <button onClick={() => openPaymentModal(pledge)} className="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-brand-700 transition-all shadow-sm">Record Payment</button>}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
                                 </table>
                             </div>
                             <PaginationFooter total={filteredContributors.length} currentPage={contributorPage} onPageChange={setContributorPage} itemsPerPage={itemsPerPage} />
                         </div>
+                    </div>
+                )}
 
-                        {/* --- NEW: WALLET LEDGER (ACCOUNT STATEMENT) --- */}
-                        <div className="space-y-4 pt-6">
-                            <div className="flex items-center justify-between px-2">
-                                <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-xs flex items-center gap-2">
-                                    <FileText className="text-emerald-500" size={16} /> Transaction History
-                                </h3>
-                                <div className="flex items-center gap-4">
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Inflow</p>
-                                        <p className="text-xs font-black text-emerald-600 tracking-tight">{formatCurrency(event.wallet?.total_inflow || 0)}</p>
-                                    </div>
-                                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-800"></div>
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Outflow</p>
-                                        <p className="text-xs font-black text-red-600 tracking-tight">{formatCurrency(event.wallet?.total_outflow || 0)}</p>
-                                    </div>
+                {/* --- NEW: FINANCE TAB (WALLET & LEDGER) --- */}
+                {activeTab === 'finance' && (
+                    <div className="space-y-6 animate-in fade-in duration-300">
+                        <div className="flex items-center justify-between px-2">
+                            <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-xs flex items-center gap-2">
+                                <FileText className="text-emerald-500" size={16} /> Wallet Statement
+                            </h3>
+                            <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Inflow</p>
+                                    <p className="text-xs font-black text-emerald-600 tracking-tight">{formatCurrency(event.wallet?.total_inflow || 0)}</p>
+                                </div>
+                                <div className="w-px h-6 bg-slate-200 dark:bg-slate-800"></div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Outflow</p>
+                                    <p className="text-xs font-black text-red-600 tracking-tight">{formatCurrency(event.wallet?.total_outflow || 0)}</p>
                                 </div>
                             </div>
+                        </div>
 
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm text-slate-600">
-                                        <thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase font-bold text-slate-500 tracking-wider border-b border-slate-100 dark:border-slate-800">
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm text-slate-600">
+                                    <thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase font-bold text-slate-500 tracking-wider border-b border-slate-100 dark:border-slate-800">
+                                        <tr>
+                                            <th className="px-6 py-4">Date</th>
+                                            <th className="px-6 py-4">Description</th>
+                                            <th className="px-6 py-4">Type</th>
+                                            <th className="px-6 py-4 text-right">Amount</th>
+                                            <th className="px-6 py-4 text-center">Verification</th>
+                                            </tr>                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                        {isTabLoading ? (
                                             <tr>
-                                                <th className="px-6 py-4">Date</th>
-                                                <th className="px-6 py-4">Description</th>
-                                                <th className="px-6 py-4">Type</th>
-                                                <th className="px-6 py-4 text-right">Amount</th>
-                                                <th className="px-6 py-4 text-center">Status</th>
+                                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic font-medium">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <Loader2 className="animate-spin" size={16} />
+                                                        Loading the ledger...
+                                                    </div>
+                                                </td>
                                             </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                            {ledger.length === 0 ? (
-                                                <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No transactions recorded in the ledger yet.</td></tr>
-                                            ) : (
-                                                ledger.map((entry) => (
-                                                    <tr key={entry.id} className="hover:bg-slate-50/50 transition-colors">
-                                                        <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
-                                                            {new Date(entry.entry_date).toLocaleDateString()}
-                                                            <div className="text-[10px] opacity-60">{new Date(entry.entry_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <div className="font-bold text-slate-900 dark:text-white leading-tight">{entry.description}</div>
-                                                            <div className="text-[10px] text-slate-400 uppercase font-medium tracking-tighter mt-0.5">{entry.source_type.replace('_', ' ')}</div>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${entry.entry_type === 'CREDIT' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                                                                {entry.entry_type}
-                                                            </span>
-                                                        </td>
-                                                        <td className={`px-6 py-4 text-right font-black ${entry.entry_type === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                            {entry.entry_type === 'CREDIT' ? '+' : '-'} {formatCurrency(entry.amount)}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center">
-                                                            <span className="inline-flex items-center gap-1 text-emerald-600 font-black text-[10px] uppercase">
-                                                                <CheckCircle size={10} /> Verified
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <PaginationFooter total={ledgerTotal} currentPage={ledgerPage} onPageChange={setLedgerPage} itemsPerPage={10} />
+                                        ) : ledger.length === 0 ? (
+                                            <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic font-medium">No transactions recorded in the ledger yet.</td></tr>
+                                        ) : (
+                                            ledger.map((entry) => (
+                                                <tr key={entry.id} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
+                                                        {new Date(entry.entry_date).toLocaleDateString()}
+                                                        <div className="text-[10px] opacity-60">{new Date(entry.entry_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="font-bold text-slate-900 dark:text-white leading-tight">{entry.description}</div>
+                                                        <div className="text-[10px] text-slate-400 uppercase font-medium tracking-tighter mt-0.5">{(entry.source_type || 'TX').replace(/_/g, ' ')}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${entry.entry_type === 'CREDIT' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                                                            {entry.entry_type}
+                                                        </span>
+                                                    </td>
+                                                    <td className={`px-6 py-4 text-right font-black ${entry.entry_type === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                        {entry.entry_type === 'CREDIT' ? '+' : '-'} {formatCurrency(entry.amount)}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className="inline-flex items-center gap-1 text-emerald-600 font-black text-[10px] uppercase">
+                                                            <CheckCircle size={10} /> Verified
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
+                            <PaginationFooter total={ledgerTotal} currentPage={ledgerPage} onPageChange={setLedgerPage} itemsPerPage={itemsPerPage} />
                         </div>
                     </div>
                 )}
