@@ -97,15 +97,15 @@ const EventDetailsPage = () => {
     const [selectedDoc, setSelectedDoc] = useState(null);
 
     const ProfessionalDocumentModal = ({ doc, event, onClose }) => {
-    if (!doc) return null;
-    
-    // Internal formatter for professional standard
-    const internalFormat = (amount) => {
-        return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS' }).format(amount || 0);
-    };
+        if (!doc) return null;
 
-    return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/90 p-4 backdrop-blur-md" onClick={onClose}>
+        // Internal formatter for professional standard
+        const internalFormat = (amount) => {
+            return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS' }).format(amount || 0);
+        };
+
+        return (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/90 p-4 backdrop-blur-md" onClick={onClose}>
                 <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col" onClick={e => e.stopPropagation()}>
                     {/* DOC HEADER */}
                     <div className="p-8 border-b border-slate-100 flex justify-between items-start">
@@ -188,7 +188,7 @@ const EventDetailsPage = () => {
     const canAccess = (permissionName) => {
         if (user?.role === 'SUPER_ADMIN') return true;
         if (user?.id === event?.owner_user_id) return true;
-        
+
         // Find membership for THIS specific event
         const membership = user?.committee_memberships?.find(m => m.event_id === id);
         if (!membership) return false;
@@ -412,7 +412,7 @@ const EventDetailsPage = () => {
             setCommitteeForm({ first_name: '', last_name: '', phone: '', committee_role: 'MEMBER' });
             setEditingCommitteeMember(null);
             fetchCommittee();
-        } catch (err) { 
+        } catch (err) {
             setCommitteeResult({ type: 'error', message: err.response?.data?.message || "Failed to save committee member" });
         }
         finally { setIsSubmitting(false); }
@@ -436,7 +436,7 @@ const EventDetailsPage = () => {
             fetchCommittee();
             setCommitteeResult({ type: 'success', message: "Member removed from committee successfully." });
         }
-        catch (err) { 
+        catch (err) {
             setCommitteeResult({ type: 'error', message: "Failed to remove member" });
         }
     };
@@ -528,7 +528,7 @@ const EventDetailsPage = () => {
         // 2. Try to find name in description (e.g. "Contribution from John")
         // 3. Fallback to Event Owner
         let recipient = entry.metadata?.contact_name || entry.metadata?.vendor_name;
-        
+
         if (!recipient && entry.description?.includes('from ')) {
             recipient = entry.description.split('from ')[1].split(' via')[0];
         }
@@ -609,7 +609,7 @@ const EventDetailsPage = () => {
     const handleRecordVendorPayment = async (e) => {
         e.preventDefault();
         if (!vendorPaymentData.amount || parseFloat(vendorPaymentData.amount) <= 0) return alert("Please enter a valid amount");
-        
+
         setIsSubmitting(true);
         try {
             await api.post(`/bookings/${selectedVendorBooking.id}/payments`, vendorPaymentData);
@@ -714,7 +714,7 @@ const EventDetailsPage = () => {
                         {event.event_status}
                     </span>
                 </div>
-                
+
                 <div className="flex flex-col md:flex-row md:items-center gap-6">
                     <div className="h-20 w-20 rounded-2xl bg-brand-600 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
                         <Calendar size={40} />
@@ -748,7 +748,7 @@ const EventDetailsPage = () => {
 
             {/* Tab Content */}
             <div className="space-y-6 animate-in fade-in duration-300">
-                
+
                 {/* 1. OVERVIEW (CAREFULLY FILTERED STATS) */}
                 {activeTab === 'overview' && (
                     <div className="space-y-6">
@@ -815,12 +815,12 @@ const EventDetailsPage = () => {
                         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                             <div className="relative flex-1">
                                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                                <input type="text" placeholder="Search guests by name or phone..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={guestSearch} onChange={e => {setGuestSearch(e.target.value); setGuestPage(1);}} />
+                                <input type="text" placeholder="Search guests by name or phone..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={guestSearch} onChange={e => { setGuestSearch(e.target.value); setGuestPage(1); }} />
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                                 <button onClick={handleDownloadTemplate} className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><Download size={14} /> Sample</button>
                                 <button onClick={() => handleAuthenticatedDownload(`/events/${id}/contacts/export`, `guests_${event.event_name}.xlsx`)} className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><FileSpreadsheet size={14} /> Export</button>
-                                <label className="flex items-center gap-2 px-3 py-2 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-lg text-xs font-bold hover:bg-brand-100 transition-colors cursor-pointer"><Upload size={14} /> Import <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={(e) => {setImportFile(e.target.files[0]); setImportResult(null);}} /></label>
+                                <label className="flex items-center gap-2 px-3 py-2 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-lg text-xs font-bold hover:bg-brand-100 transition-colors cursor-pointer"><Upload size={14} /> Import <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={(e) => { setImportFile(e.target.files[0]); setImportResult(null); }} /></label>
                                 <button onClick={() => { setEditingGuest(null); setGuestForm({ full_name: '', phone: '', email: '', relationship_label: '', is_vip: false }); setShowGuestModal(true); }} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm hover:bg-brand-700 transition-all"><Plus size={16} /> Add Guest</button>
                             </div>
                         </div>
@@ -921,7 +921,7 @@ const EventDetailsPage = () => {
                         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                             <div className="relative flex-1">
                                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                                <input type="text" placeholder="Search contributors by name..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={contributorSearch} onChange={e => {setContributorSearch(e.target.value); setContributorPage(1);}} />
+                                <input type="text" placeholder="Search contributors by name..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={contributorSearch} onChange={e => { setContributorSearch(e.target.value); setContributorPage(1); }} />
                             </div>
                             <div className="flex items-center gap-2">
                                 <button onClick={() => handleAuthenticatedDownload(`/events/${id}/contributors/export`, `contributors_${event.event_name}.xlsx`)} className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><FileSpreadsheet size={14} /> Export</button>
@@ -1001,7 +1001,7 @@ const EventDetailsPage = () => {
                                             <th className="px-6 py-4">Type</th>
                                             <th className="px-6 py-4 text-right">Amount</th>
                                             <th className="px-6 py-4 text-center">Verification</th>
-                                            </tr>                                    </thead>
+                                        </tr>                                    </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                         {isTabLoading ? (
                                             <tr>
@@ -1019,7 +1019,7 @@ const EventDetailsPage = () => {
                                                 <tr key={entry.id} className="hover:bg-slate-50/50 transition-colors">
                                                     <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
                                                         {new Date(entry.entry_date).toLocaleDateString()}
-                                                        <div className="text-[10px] opacity-60">{new Date(entry.entry_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                                        <div className="text-[10px] opacity-60">{new Date(entry.entry_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <div className="font-bold text-slate-900 dark:text-white leading-tight">{entry.description}</div>
@@ -1055,7 +1055,7 @@ const EventDetailsPage = () => {
                         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                             <div className="relative flex-1">
                                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                                <input type="text" placeholder="Search items or categories..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={budgetSearch} onChange={e => {setBudgetSearch(e.target.value); setBudgetPage(1);}} />
+                                <input type="text" placeholder="Search items or categories..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={budgetSearch} onChange={e => { setBudgetSearch(e.target.value); setBudgetPage(1); }} />
                             </div>
                             <div className="flex items-center gap-2">
                                 <button onClick={() => handleAuthenticatedDownload(`/events/${id}/budget/export`, `budget_${event.event_name}.xlsx`)} className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><FileSpreadsheet size={14} /> Export</button>
@@ -1088,9 +1088,9 @@ const EventDetailsPage = () => {
                                                 <td className="px-6 py-4 text-right font-bold text-slate-900 dark:text-white">{formatCurrency(item.estimated_cost)}</td>
                                                 <td className="px-6 py-4 text-right text-slate-400">{formatCurrency(item.actual_cost)}</td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <span 
-                                                       title="Status managed automatically by system movements"
-                                                       className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border ${item.budget_item_status === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : item.budget_item_status === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}
+                                                    <span
+                                                        title="Status managed automatically by system movements"
+                                                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border ${item.budget_item_status === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : item.budget_item_status === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}
                                                     >
                                                         {item.budget_item_status.replace('_', ' ')}
                                                     </span>
@@ -1190,7 +1190,7 @@ const EventDetailsPage = () => {
                         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                             <div className="relative flex-1">
                                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                                <input type="text" placeholder="Search members..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={committeeSearch} onChange={e => {setCommitteeSearch(e.target.value); setCommitteePage(1);}} />
+                                <input type="text" placeholder="Search members..." className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-brand-500 bg-transparent dark:text-white" value={committeeSearch} onChange={e => { setCommitteeSearch(e.target.value); setCommitteePage(1); }} />
                             </div>
                             <button onClick={() => { setEditingCommitteeMember(null); setCommitteeForm({ first_name: '', last_name: '', phone: '', committee_role: 'MEMBER' }); setShowCommitteeModal(true); }} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm hover:bg-brand-700 transition-all"><Plus size={16} /> Add Member</button>
                         </div>
@@ -1202,7 +1202,7 @@ const EventDetailsPage = () => {
                                     {committeeResult.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
                                     <p className="text-sm font-bold">{committeeResult.message}</p>
                                 </div>
-                                <button onClick={() => setCommitteeResult(null)} className="p-1 hover:bg-black/5 rounded-full"><X size={16}/></button>
+                                <button onClick={() => setCommitteeResult(null)} className="p-1 hover:bg-black/5 rounded-full"><X size={16} /></button>
                             </div>
                         )}
 
@@ -1237,7 +1237,7 @@ const EventDetailsPage = () => {
             </div>
 
             {/* MODALS (Restored visual perfection) */}
-            
+
             {/* BUDGET MODAL */}
             {showBudgetModal && (
                 <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -1337,7 +1337,7 @@ const EventDetailsPage = () => {
                     </div>
                 </div>
             )}
-            
+
             {/* COMMITTEE MODAL */}
             {showCommitteeModal && (
                 <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
@@ -1355,10 +1355,10 @@ const EventDetailsPage = () => {
                             )}
                             <div>
                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Assigned Role</label>
-                                <select 
-                                    required 
-                                    className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-2xl px-6 py-4 font-bold outline-none mb-4" 
-                                    value={committeeForm.committee_role} 
+                                <select
+                                    required
+                                    className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-2xl px-6 py-4 font-bold outline-none mb-4"
+                                    value={committeeForm.committee_role}
                                     onChange={e => setCommitteeForm({ ...committeeForm, committee_role: e.target.value })}
                                 >
                                     <option value="MEMBER">Committee Member</option>

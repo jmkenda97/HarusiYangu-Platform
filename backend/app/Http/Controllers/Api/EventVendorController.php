@@ -44,6 +44,7 @@ class EventVendorController extends Controller
                     'amount_paid' => $eventVendor->amount_paid,
                     'balance_due' => $eventVendor->balance_due,
                     'contract_notes' => $eventVendor->contract_notes,
+                    'metadata' => $eventVendor->metadata,
                     'start_date' => $eventVendor->start_date,
                     'end_date' => $eventVendor->end_date,
                     'created_at' => $eventVendor->created_at,

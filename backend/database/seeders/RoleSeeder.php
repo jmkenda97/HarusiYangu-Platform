@@ -10,6 +10,7 @@ class RoleSeeder extends Seeder
 {
     public function run(): void
     {
+        
         // 1. Reset cached roles and permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 

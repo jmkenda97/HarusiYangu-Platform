@@ -18,6 +18,7 @@ const EventDetailsPage = React.lazy(() => import('./pages/EventDetailsPage'));
 const VendorCatalogPage = React.lazy(() => import('./pages/VendorCatalogPage'));
 const VendorProfilePage = React.lazy(() => import('./pages/VendorProfilePage'));
 const VendorDashboardPage = React.lazy(() => import('./pages/VendorDashboardPage'));
+const VendorBookingsPage = React.lazy(() => import('./pages/VendorBookingsPage'));
 const AdminVendorsPage = React.lazy(() => import('./pages/AdminVendorsPage'));
 const NotificationsPage = React.lazy(() => import('./pages/NotificationsPage'));
 
@@ -119,6 +120,12 @@ function App() {
               <Route path="/vendor/dashboard" element={
                 <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Dashboard...</div>}>
                   <VendorDashboardPage />
+                </Suspense>
+              } />
+
+              <Route path="/vendor/bookings" element={
+                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Bookings...</div>}>
+                  <VendorBookingsPage />
                 </Suspense>
               } />
 

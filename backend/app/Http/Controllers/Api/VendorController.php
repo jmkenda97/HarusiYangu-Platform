@@ -193,6 +193,7 @@ class VendorController extends Controller
                 'status' => $ev->status,
                 'last_quote_amount' => $ev->last_quote_amount,
                 'contract_notes' => $ev->contract_notes,
+                'metadata' => $ev->metadata,
             ];
         })->values();
 

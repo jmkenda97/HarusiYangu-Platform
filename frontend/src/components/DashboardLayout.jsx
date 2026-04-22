@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, Settings, Calendar, Home, PanelLeftClose, PanelLeftOpen, Moon, Sun, Store, Building2, Package } from 'lucide-react';
+import { LayoutDashboard, Users, User, LogOut, Menu, ChevronRight, ChevronDown, Settings, Calendar, Home, PanelLeftClose, PanelLeftOpen, Moon, Sun, Store, Building2, Package, Briefcase } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -18,6 +18,7 @@ const menuItems = [
 // Vendor-specific menu items
 const vendorMenuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/vendor/dashboard' },
+    { name: 'Manage Business', icon: Briefcase, path: '/vendor/bookings' },
     { name: 'My Profile', icon: Building2, path: '/vendor/profile' },
 ];
 
