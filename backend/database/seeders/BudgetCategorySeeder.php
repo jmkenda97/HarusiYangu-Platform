@@ -43,3 +43,4 @@ class BudgetCategorySeeder extends Seeder
         }
     }
 }
+

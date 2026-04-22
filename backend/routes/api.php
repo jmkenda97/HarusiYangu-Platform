@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\VendorController;
 use App\Http\Controllers\Api\VendorServiceController;
 use App\Http\Controllers\Api\VendorDocumentController;
 use App\Http\Controllers\Api\VendorInquiryController;
+use App\Http\Controllers\Api\WalletLedgerController;
 // CORRECTED IMPORT: NO 'Api\' BECAUSE CONTROLLER IS IN app/Http/Controllers
 use App\Http\Controllers\EventCommitteeController;
 
@@ -73,7 +74,8 @@ Route::prefix('v1')->group(function () {
         // Nested Routes for Contributors, Payments, Contacts, Budget, and Committee
         // URL Pattern: /api/v1/events/{event_id}/...
         Route::prefix('events/{eventId}')->group(function () {
-
+            Route::get('/ledger', [WalletLedgerController::class, 'index']);
+            
             // --- COMMITTEE ROUTES ---
             Route::get('/committee', [EventCommitteeController::class, 'index']);
             Route::post('/committee', [EventCommitteeController::class, 'store']);

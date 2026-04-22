@@ -199,6 +199,13 @@ class VendorController extends Controller
         // Get Wallet Data
         $wallet = \App\Models\VendorWallet::where('vendor_id', $vendor->id)->first();
 
+        // Get Recent Payments (Earnings History)
+        $payments = \App\Models\VendorPayment::with(['event'])
+            ->where('vendor_id', $vendor->id)
+            ->orderBy('payment_date', 'desc')
+            ->limit(10)
+            ->get();
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -218,6 +225,7 @@ class VendorController extends Controller
                 'documents' => $vendor->documents,
                 'events' => $confirmedEvents,
                 'inquiries' => $inquiries,
+                'payments' => $payments, // For the professional earnings statement
                 'wallet' => [
                     'available_balance' => $wallet ? $wallet->available_balance : 0,
                     'pending_balance' => $wallet ? $wallet->pending_balance : 0,

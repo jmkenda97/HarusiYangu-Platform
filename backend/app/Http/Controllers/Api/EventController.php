@@ -129,6 +129,7 @@ class EventController extends Controller
             'owner',
             'committee.user',
             'contacts.pledge',
+            'wallet' // Added for perfect financial visibility
         ])->whereNull('archived_at')->findOrFail($id);
 
         $user = auth()->user();

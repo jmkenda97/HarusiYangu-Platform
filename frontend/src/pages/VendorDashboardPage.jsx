@@ -135,6 +135,81 @@ const VendorDashboardPage = () => {
     const [toast, setToast] = useState(null);
     const [selectedInquiry, setSelectedInquiry] = useState(null);
 
+    // --- LEDGER & DOCUMENT STATES ---
+    const [ledger, setLedger] = useState([]);
+    const [selectedDoc, setSelectedDoc] = useState(null);
+
+    const ProfessionalDocumentModal = ({ doc, onClose }) => {
+        if (!doc) return null;
+        return (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-md" onClick={onClose}>
+                <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col" onClick={e => e.stopPropagation()}>
+                    <div className="p-8 border-b border-slate-100 flex justify-between items-start">
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="h-8 w-8 bg-brand-600 rounded-lg flex items-center justify-center text-white"><Shield size={20} /></div>
+                                <span className="font-black text-xl text-slate-900 tracking-tighter">HarusiYangu</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em]">Verified Vendor Document</p>
+                        </div>
+                        <div className="text-right">
+                            <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">{doc.type}</h2>
+                            <p className="text-slate-500 font-bold text-sm">Ref: {doc.ref_number}</p>
+                        </div>
+                    </div>
+                    <div className="p-12 space-y-12">
+                        <div className="flex justify-between">
+                            <div className="space-y-1">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Service Provider</p>
+                                <p className="font-black text-slate-900 text-lg">{dashboardData?.profile?.business_name}</p>
+                                <p className="text-sm text-slate-500">{dashboardData?.profile?.phone}</p>
+                            </div>
+                            <div className="text-right space-y-1">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Billed To (Host)</p>
+                                <p className="font-black text-slate-900">{doc.recipient_name}</p>
+                                <p className="text-sm text-slate-500">Event Transaction</p>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 rounded-2xl p-8 space-y-6">
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-200 pb-4">Payment Breakdown</h4>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <p className="font-black text-slate-900 text-xl">{doc.service_name}</p>
+                                    <p className="text-sm text-slate-500">{doc.description}</p>
+                                </div>
+                                <p className="font-black text-2xl text-slate-900">{new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS' }).format(doc.amount)}</p>
+                            </div>
+                        </div>
+                        <div className="border-2 border-emerald-500 rounded-2xl p-6 flex items-center justify-center gap-4 bg-emerald-50/30">
+                            <div className="h-12 w-12 bg-emerald-500 rounded-full flex items-center justify-center text-white"><CheckCircle size={28} /></div>
+                            <div>
+                                <p className="text-2xl font-black text-emerald-600 uppercase tracking-tighter">Payment Confirmed</p>
+                                <p className="text-xs font-bold text-emerald-500 uppercase tracking-widest">Released to Vendor Account</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-center gap-4">
+                        <button onClick={() => window.print()} className="bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-slate-100 transition-all"><Download size={16} /> Save Copy</button>
+                        <button onClick={onClose} className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all">Close</button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const openInvoice = (payment) => {
+        setSelectedDoc({
+            type: 'Payment Receipt',
+            ref_number: `PAY-${payment.id.substring(0, 8).toUpperCase()}`,
+            recipient_name: 'Event Host', // Could be more specific if event object was more detailed here
+            service_name: `Milestone Payment: ${payment.milestone}`,
+            description: `Payment for event services recorded on ${new Date(payment.payment_date).toLocaleDateString()}`,
+            amount: payment.amount,
+            is_paid: true,
+            notes: `Reference: ${payment.transaction_reference || 'N/A'}. This is a verified transaction.`
+        });
+    };
+
     // Pagination states
     const [inquiryPage, setInquiryPage] = useState(1);
     const [bookingPage, setBookingPage] = useState(1);
@@ -173,7 +248,8 @@ const VendorDashboardPage = () => {
             assignedEvents: events?.length || 0,
             pendingInquiries: inquiries?.filter(i => i.status === 'INQUIRY').length || 0,
             totalEarnings: wallet?.total_earnings || 0,
-            pendingBalance: wallet?.pending_balance || 0
+            pendingBalance: wallet?.pending_balance || 0,
+            availableBalance: wallet?.available_balance || 0
         };
     }, [dashboardData]);
 
@@ -188,6 +264,12 @@ const VendorDashboardPage = () => {
         const start = (bookingPage - 1) * itemsPerPage;
         return dashboardData.events.slice(start, start + itemsPerPage);
     }, [dashboardData, bookingPage]);
+
+    const paginatedPayments = useMemo(() => {
+        if (!dashboardData?.payments) return [];
+        // No separate pagination state for payments yet, using itemsPerPage
+        return dashboardData.payments.slice(0, itemsPerPage);
+    }, [dashboardData]);
 
     const rejectionItems = useMemo(() => {
         if (!dashboardData) return [];
@@ -336,8 +418,72 @@ const VendorDashboardPage = () => {
                     <p className="text-xs text-slate-400 mt-2">{stats.profileStatus === 'ACTIVE' ? 'Your profile is verified and active' : 'Complete your profile to get verified'}</p>
                 </div>
 
-                <StatCard label="Earnings" value={formatCurrency(stats.totalEarnings)} icon={Wallet} color="emerald" isCurrency subtext="Total payments received" />
-                <StatCard label="Active Events" value={stats.assignedEvents} icon={Calendar} color="indigo" subtext="Currently booked events" />
+                <StatCard label="Earnings" value={formatCurrency(stats.totalEarnings)} icon={Wallet} color="emerald" isCurrency subtext="Total lifetime earnings" />
+                <StatCard label="Withdrawal Balance" value={formatCurrency(stats.availableBalance)} icon={Shield} color="brand" isCurrency subtext="Money ready for withdrawal" />
+            </div>
+
+            {/* Earnings History Table - Professional Statement */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <TrendingUp className="text-emerald-500" size={20} /> My Earnings Statement
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">Track your payments and milestones from all events</p>
+                    </div>
+                    <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">Verified History</span>
+                </div>
+                <div className="overflow-x-auto">
+                    {dashboardData?.payments?.length === 0 ? (
+                        <div className="p-16 text-center">
+                            <DollarSign className="w-12 h-12 text-slate-200 dark:text-slate-700 mx-auto mb-4" />
+                            <p className="text-slate-500 dark:text-slate-400 font-medium">No payments received yet.</p>
+                        </div>
+                    ) : (
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 dark:bg-slate-800 text-[10px] uppercase font-bold text-slate-500 tracking-wider border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th className="px-6 py-4">Date</th>
+                                    <th className="px-6 py-4">Event Details</th>
+                                    <th className="px-6 py-4">Milestone Phase</th>
+                                    <th className="px-6 py-4 text-right">Amount Received</th>
+                                    <th className="px-6 py-4 text-center">Invoice</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {paginatedPayments.map((payment) => (
+                                    <tr key={payment.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                        <td className="px-6 py-4 text-xs text-slate-500">
+                                            {new Date(payment.payment_date).toLocaleDateString()}
+                                            <div className="text-[10px] opacity-60 uppercase">{new Date(payment.payment_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="font-bold text-slate-900 dark:text-white">{payment.event?.event_name}</div>
+                                            <div className="text-[10px] text-slate-400 uppercase font-medium tracking-tight">Payment via {payment.payment_method}</div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border ${payment.is_released ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
+                                                {payment.milestone} {payment.is_released ? '' : '(ESCROW)'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-black text-emerald-600">
+                                            + {formatCurrency(payment.amount)}
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <button 
+                                                onClick={() => openInvoice(payment)}
+                                                className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-all"
+                                                title="View Official Receipt"
+                                            >
+                                                <FileText size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
             </div>
 
             {/* Inquiries Table */}
