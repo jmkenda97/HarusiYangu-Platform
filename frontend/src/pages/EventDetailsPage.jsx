@@ -5,7 +5,7 @@ import api from '../api/axios';
 import {
     ArrowLeft, Users, Wallet, CreditCard, Plus, ChevronLeft, ChevronRight, CheckCircle, Clock,
     AlertCircle, UserPlus, Trash2, Edit, Crown, Mail, Phone, DollarSign, Calculator, AlertTriangle,
-    Upload, Download, FileSpreadsheet, XCircle, Calendar, Search, Shield, Award, Briefcase, Store, FileText, Loader2, X, TrendingUp, MapPin
+    Upload, Download, FileSpreadsheet, XCircle, Calendar, Search, Shield, Award, Briefcase, Store, FileText, Loader2, X, TrendingUp, MapPin, Printer
 } from 'lucide-react';
 
 const formatCurrency = (amount) => {
@@ -98,87 +98,125 @@ const EventDetailsPage = () => {
 
     const ProfessionalDocumentModal = ({ doc, event, onClose }) => {
         if (!doc) return null;
+        const isInvoice = doc.type === 'Payment Receipt' || doc.type === 'Expense Invoice';
+        const isNegotiation = doc.type === 'Service Inquiry' || doc.type === 'Request for Quote';
+        const businessName = doc.business_name || (doc.type.includes('Inquiry') ? doc.business_name : 'Service Provider');
 
-        // Internal formatter for professional standard
-        const internalFormat = (amount) => {
-            return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS' }).format(amount || 0);
-        };
+        // Determine the "Final" value to show in the big total box
+        const documentTotal = doc.last_quote && doc.last_quote > 0 ? doc.last_quote : doc.amount;
 
         return (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/90 p-4 backdrop-blur-md" onClick={onClose}>
-                <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col" onClick={e => e.stopPropagation()}>
-                    {/* DOC HEADER */}
-                    <div className="p-8 border-b border-slate-100 flex justify-between items-start">
-                        <div>
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-8 w-8 bg-brand-600 rounded-lg flex items-center justify-center text-white"><Shield size={20} /></div>
-                                <span className="font-black text-xl text-slate-900 tracking-tighter">HarusiYangu</span>
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
+                <style>
+                    {`
+                    @media print {
+                        .no-print { display: none !important; }
+                        body { background: white !important; }
+                        .print-container { 
+                            box-shadow: none !important; 
+                            border: none !important; 
+                            width: 100% !important;
+                            max-width: none !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                        }
+                    }
+                    `}
+                </style>
+                <div className="bg-white dark:bg-slate-900 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col border border-slate-200 dark:border-slate-800 print-container" onClick={e => e.stopPropagation()}>
+                    {/* Document Content Area */}
+                    <div id="document-content" className="p-8 md:p-12 space-y-8 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                        {/* Header */}
+                        <div className="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-8">
+                            <div>
+                                <h1 className="font-black text-2xl text-brand-600 tracking-tighter uppercase">HarusiYangu</h1>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">{isInvoice ? 'Official Financial Statement' : 'Service Inquiry Request'}</p>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em]">Official Financial Document</p>
+                            <div className="text-right">
+                                <h2 className={`text-2xl font-black uppercase tracking-tighter ${isInvoice ? 'text-emerald-600' : 'text-brand-600'}`}>{isInvoice ? 'RECEIPT' : 'INQUIRY'}</h2>
+                                <p className="text-slate-500 dark:text-slate-400 font-bold text-xs mt-1">Ref: {doc.ref_number}</p>
+                                <p className="text-slate-400 font-bold text-[9px] uppercase mt-1">{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                            </div>
                         </div>
-                        <div className="text-right">
-                            <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">{doc.type}</h2>
-                            <p className="text-slate-500 font-bold text-sm">Ref: {doc.ref_number}</p>
-                        </div>
-                    </div>
 
-                    {/* DOC BODY */}
-                    <div className="p-12 space-y-12">
-                        <div className="flex justify-between">
+                        {/* Parties Section */}
+                        <div className="grid grid-cols-2 gap-12">
                             <div className="space-y-1">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Issued To</p>
-                                <p className="font-black text-slate-900 text-lg">{doc.recipient_name}</p>
-                                <p className="text-sm text-slate-500">{doc.recipient_contact}</p>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">From: Service Provider</p>
+                                <p className="font-black text-slate-900 dark:text-white text-base">{businessName || 'Verified Vendor'}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">Verified Marketplace Partner</p>
                             </div>
                             <div className="text-right space-y-1">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Event Detail</p>
-                                <p className="font-black text-slate-900">{event.event_name}</p>
-                                <p className="text-sm text-slate-500">{new Date(event.event_date).toLocaleDateString()}</p>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">To: Event Host</p>
+                                <p className="font-black text-slate-900 dark:text-white text-base">{doc.recipient_name}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{event.event_name}</p>
                             </div>
                         </div>
 
-                        <div className="bg-slate-50 rounded-2xl p-8 space-y-6">
-                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-200 pb-4">Itemized Breakdown</h4>
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <p className="font-black text-slate-900 text-xl">{doc.service_name}</p>
-                                    <p className="text-sm text-slate-500">{doc.description}</p>
+                        {/* Itemized Breakdown Section */}
+                        <div className="space-y-4">
+                            <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 flex justify-between rounded-t-xl border-x border-t border-slate-200 dark:border-slate-800">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Document Breakdown</span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount (TZS)</span>
+                            </div>
+                            
+                            <div className="border border-slate-200 dark:border-slate-800 rounded-b-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                                {/* Row 1: Host Initial Offer */}
+                                <div className="p-6 bg-white dark:bg-slate-900">
+                                    <div className="flex justify-between items-start gap-8">
+                                        <div className="flex-1">
+                                            <p className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-1">Host Initial Bargain</p>
+                                            <p className="font-black text-slate-900 dark:text-white text-base mb-1">{doc.service_name}</p>
+                                            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">"{doc.description || 'Service details provided via platform.'}"</p>
+                                        </div>
+                                        <p className="font-black text-lg text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(doc.amount)}</p>
+                                    </div>
                                 </div>
-                                <p className="font-black text-2xl text-slate-900">{formatCurrency(doc.amount)}</p>
+
+                                {/* Row 2: Vendor Reply (If exists) */}
+                                {isNegotiation && doc.last_quote && doc.last_quote > 0 && (
+                                    <div className="p-6 bg-slate-50/50 dark:bg-brand-900/5">
+                                        <div className="flex justify-between items-start gap-8">
+                                            <div className="flex-1">
+                                                <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Vendor Quote Response</p>
+                                                <p className="font-black text-slate-900 dark:text-white text-base mb-1">Professional Quote Adjustment</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">
+                                                    "{doc.vendor_description || 'Vendor has provided a quote adjustment for the requested service.'}"
+                                                </p>
+                                            </div>
+                                            <p className="font-black text-lg text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(doc.last_quote)}</p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {doc.is_paid && (
-                            <div className="border-2 border-emerald-500 rounded-2xl p-6 flex items-center justify-center gap-4 bg-emerald-50/30">
-                                <div className="h-12 w-12 bg-emerald-500 rounded-full flex items-center justify-center text-white"><CheckCircle size={28} /></div>
-                                <div>
-                                    <p className="text-2xl font-black text-emerald-600 uppercase tracking-tighter">Verified Payment</p>
-                                    <p className="text-xs font-bold text-emerald-500 uppercase tracking-widest">HarusiYangu Payment Gateway</p>
-                                </div>
+                        {/* Status & Summary Footer */}
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                            <div className={`inline-flex items-center gap-2.5 px-4 py-2 rounded-full border-2 ${doc.is_paid ? 'border-emerald-500/20 bg-emerald-50/5 text-emerald-600' : 'border-brand-500/20 bg-brand-50/5 text-brand-600'}`}>
+                                <div className={`h-2 w-2 rounded-full animate-pulse ${doc.is_paid ? 'bg-emerald-500' : 'bg-brand-500'}`}></div>
+                                <span className="text-[10px] font-black uppercase tracking-widest">{doc.is_paid ? 'Transaction Verified' : 'Status: Negotiation Pending'}</span>
                             </div>
-                        )}
 
-                        <div className="grid grid-cols-2 gap-12 pt-8">
-                            <div className="space-y-3">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Notes & Terms</p>
-                                <p className="text-xs text-slate-500 leading-relaxed italic">{doc.notes || 'This document is a computer-generated summary of the transaction recorded in the HarusiYangu platform. Please keep this for your records.'}</p>
+                            <div className="bg-slate-900 dark:bg-brand-600 text-white rounded-2xl px-8 py-4 text-center min-w-[240px] shadow-lg shadow-brand-500/10">
+                                <p className="text-[8px] font-black uppercase tracking-widest mb-1 opacity-60">Current Total Document Value</p>
+                                <p className="text-2xl font-black">{formatCurrency(documentTotal)}</p>
                             </div>
-                            <div className="space-y-4">
-                                <div className="flex justify-between border-b border-slate-100 pb-2">
-                                    <span className="text-sm font-bold text-slate-500">Subtotal</span>
-                                    <span className="font-black text-slate-900">{formatCurrency(doc.amount)}</span>
-                                </div>
-                                <div className="flex justify-between items-center bg-slate-900 text-white p-4 rounded-xl">
-                                    <span className="text-xs font-black uppercase tracking-widest">Total Amount</span>
-                                    <span className="text-2xl font-black">{formatCurrency(doc.amount)}</span>
-                                </div>
-                            </div>
+                        </div>
+
+                        <div className="text-center pt-8">
+                            <p className="text-[9px] text-slate-400 font-medium italic">Thank you for choosing HarusiYangu Marketplace. This is a system-generated document.</p>
                         </div>
                     </div>
 
-                    <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-center gap-4">
-                        <button onClick={() => window.print()} className="bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-slate-100 transition-all"><Download size={16} /> Save PDF</button>
-                        <button onClick={onClose} className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all">Close Document</button>
+                    {/* Controls - HIDDEN DURING PRINT */}
+                    <div className="p-6 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-700 flex justify-center gap-3 no-print">
+                        <button onClick={() => window.print()} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-slate-100 transition-all shadow-sm">
+                            <Printer size={14} /> Print / Save as PDF
+                        </button>
+                        <button onClick={onClose} className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-10 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all shadow-lg">
+                            Close
+                        </button>
                     </div>
                 </div>
             </div>
@@ -507,14 +545,21 @@ const EventDetailsPage = () => {
 
     // --- VENDOR FUNCTIONS ---
     const openRFQ = (v) => {
+        // Split contract notes to extract Vendor's reply if exists
+        const notesParts = (v.contract_notes || '').split("\n\nQuote Response: ");
+        const hostBargainDesc = notesParts[0];
+        const vendorQuoteDesc = notesParts[1] || '';
+
         setSelectedDoc({
-            type: 'Request for Quote',
-            ref_number: `RFQ-${v.id.substring(0, 8).toUpperCase()}`,
-            recipient_name: v.vendor?.business_name,
-            recipient_contact: v.vendor?.phone || v.vendor?.email,
+            type: 'Service Inquiry',
+            ref_number: `INQ-${v.id.substring(0, 8).toUpperCase()}`,
+            business_name: v.vendor?.business_name,
+            recipient_name: event?.owner?.first_name ? (event.owner.first_name + ' ' + (event.owner.last_name || '')) : 'Verified Host',
             service_name: v.assigned_service,
-            description: v.contract_notes || 'Service inquiry following verified catalog standards.',
-            amount: v.last_quote_amount > 0 ? v.last_quote_amount : 0,
+            description: hostBargainDesc || 'Service inquiry following verified catalog standards.',
+            vendor_description: vendorQuoteDesc, // The Vendor's Reply Notes
+            amount: v.metadata?.target_amount || 0, // Trace from host first bargain
+            last_quote: v.last_quote_amount, // Vendor reply amount
             is_paid: false,
             notes: 'This is a preliminary request for pricing. Final agreement is subject to host approval.'
         });
@@ -1386,6 +1431,7 @@ const EventDetailsPage = () => {
                     </div>
                 </div>
             )}
+            {selectedDoc && <ProfessionalDocumentModal doc={selectedDoc} event={event} onClose={() => setSelectedDoc(null)} />}
         </div>
     );
 };
