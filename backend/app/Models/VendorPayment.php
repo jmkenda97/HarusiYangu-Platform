@@ -30,15 +30,20 @@ class VendorPayment extends Model
         'notes',
         'recorded_by',
         'is_released',
+        'is_vendor_confirmed',
+        'vendor_confirmed_at',
         'milestone',
         'milestone_percentage',
         'metadata',
+        'proof_attachment_url',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'payment_date' => 'datetime',
         'is_released' => 'boolean',
+        'is_vendor_confirmed' => 'boolean',
+        'vendor_confirmed_at' => 'datetime',
         'milestone_percentage' => 'decimal:2',
         'metadata' => 'array',
         'created_at' => 'datetime',

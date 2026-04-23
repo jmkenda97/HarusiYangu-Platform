@@ -67,6 +67,7 @@ class VendorPaymentController extends Controller
             'milestone' => 'required|string|in:DEPOSIT,INTERIM,FINAL,CUSTOM',
             'payment_method' => 'required|string',
             'transaction_reference' => 'nullable|string',
+            'proof_attachment' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
             'notes' => 'nullable|string',
             'metadata' => 'nullable|array'
         ]);
@@ -86,6 +87,12 @@ class VendorPaymentController extends Controller
 
         DB::beginTransaction();
         try {
+            // Handle Proof Upload
+            $proofUrl = null;
+            if ($request->hasFile('proof_attachment')) {
+                $proofUrl = $request->file('proof_attachment')->store('vendor_payments/proofs', 'public');
+            }
+
             // DEPOSIT/INTERIM (30%/30%) are released to vendor immediately.
             // FINAL (40%) is held until Host confirms service delivery.
             $isReleased = in_array($request->milestone, ['DEPOSIT', 'INTERIM']);
@@ -101,6 +108,7 @@ class VendorPaymentController extends Controller
                 'payment_method' => $request->payment_method,
                 'payment_status' => 'SUCCESS',
                 'transaction_reference' => $request->transaction_reference,
+                'proof_attachment_url' => $proofUrl,
                 'payment_date' => now(),
                 'notes' => $request->notes,
                 'recorded_by' => auth()->id(),
@@ -158,7 +166,7 @@ class VendorPaymentController extends Controller
             NotificationService::notify(
                 $booking->vendor->user,
                 "Payment Received: " . formatCurrency($request->amount),
-                "A payment of " . formatCurrency($request->amount) . " has been recorded for " . $booking->event->event_name . " (" . $request->milestone . ").",
+                "A payment of " . formatCurrency($request->amount) . " has been recorded for " . $booking->event->event_name . " (" . $request->milestone . "). Please confirm receipt once you see it in your account.",
                 [
                     'icon' => 'DollarSign', 
                     'event_id' => $booking->event_id, 
@@ -173,6 +181,51 @@ class VendorPaymentController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->errorResponse('Payment failed: ' . $e->getMessage(), [], 500);
+        }
+    }
+
+    /**
+     * Vendor confirms they have received the payment in their real account
+     */
+    public function confirmReceipt($paymentId)
+    {
+        $payment = VendorPayment::with(['vendor', 'vendor.user', 'event', 'event.owner'])->findOrFail($paymentId);
+
+        // Security check: Only the vendor who received the payment can confirm it
+        if ($payment->vendor->user_id !== auth()->id()) {
+            return $this->errorResponse('Unauthorized.', [], 403);
+        }
+
+        if ($payment->is_vendor_confirmed) {
+            return $this->errorResponse('This payment has already been confirmed.', [], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $payment->update([
+                'is_vendor_confirmed' => true,
+                'vendor_confirmed_at' => now()
+            ]);
+
+            // Notify Host
+            NotificationService::notify(
+                $payment->event->owner,
+                "Payment Confirmed by Vendor",
+                "{$payment->vendor->business_name} has confirmed receipt of the " . formatCurrency($payment->amount) . " payment for {$payment->event->event_name}.",
+                [
+                    'icon' => 'CheckCircle', 
+                    'event_id' => $payment->event_id, 
+                    'payment_id' => $payment->id,
+                    'link' => "/events/{$payment->event_id}?tab=vendors"
+                ],
+                auth()->user()
+            );
+
+            DB::commit();
+            return $this->successResponse('Payment receipt confirmed successfully.', new \App\Http\Resources\VendorPaymentResource($payment));
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->errorResponse('Confirmation failed: ' . $e->getMessage(), [], 500);
         }
     }
 }
