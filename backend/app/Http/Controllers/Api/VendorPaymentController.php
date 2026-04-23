@@ -102,7 +102,7 @@ class VendorPaymentController extends Controller
                 'amount' => $request->amount,
                 'milestone' => $request->milestone,
                 'payment_method' => $request->payment_method,
-                'payment_status' => 'COMPLETED',
+                'payment_status' => 'SUCCESS',
                 'transaction_reference' => $request->transaction_reference,
                 'payment_date' => now(),
                 'notes' => $request->notes,
