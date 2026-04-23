@@ -7,8 +7,8 @@ const ProfilePage = () => {
     const fileInputRef = useRef(null);
 
     // --- CORRECT URL ---
-    const BASE_URL = 'http://127.0.0.1:8000';
-    const API_ENDPOINT = `${BASE_URL}/api/v1/users/profile`;
+    const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+    const API_ENDPOINT = `${BASE_URL}/users/profile`;
 
     const [formData, setFormData] = useState({
         first_name: '',
