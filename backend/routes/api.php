@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\VendorServiceController;
 use App\Http\Controllers\Api\VendorDocumentController;
 use App\Http\Controllers\Api\VendorInquiryController;
 use App\Http\Controllers\Api\WalletLedgerController;
+use App\Http\Controllers\Api\VendorPayoutAccountController;
 // CORRECTED IMPORT: NO 'Api\' BECAUSE CONTROLLER IS IN app/Http/Controllers
 use App\Http\Controllers\EventCommitteeController;
 
@@ -54,6 +55,7 @@ Route::prefix('v1')->group(function () {
 
         // Event Bookings & Negotiation (Task #4)
         Route::post('/events/{eventId}/inquiry', [VendorInquiryController::class, 'store']);
+        Route::get('/bookings/{bookingId}/invoice', [\App\Http\Controllers\Api\EventBookingController::class, 'getInvoice']);
         Route::put('/bookings/{bookingId}/quote', [\App\Http\Controllers\Api\EventBookingController::class, 'sendQuote']);
         Route::put('/bookings/{bookingId}/accept', [\App\Http\Controllers\Api\EventBookingController::class, 'acceptQuote']);
         Route::put('/bookings/{bookingId}/confirm-service', [\App\Http\Controllers\Api\EventBookingController::class, 'confirmServiceReceived']);
@@ -61,6 +63,13 @@ Route::prefix('v1')->group(function () {
         // Financials & Milestone Payments (Task #5)
         Route::get('/bookings/{bookingId}/payments', [\App\Http\Controllers\Api\VendorPaymentController::class, 'getPaymentInfo']);
         Route::post('/bookings/{bookingId}/payments', [\App\Http\Controllers\Api\VendorPaymentController::class, 'store']);
+        Route::put('/payments/{paymentId}/confirm', [\App\Http\Controllers\Api\VendorPaymentController::class, 'confirmReceipt']);
+
+        // Payout Accounts Management
+        Route::get('/vendor/payout-accounts', [VendorPayoutAccountController::class, 'index']);
+        Route::post('/vendor/payout-accounts', [VendorPayoutAccountController::class, 'store']);
+        Route::put('/vendor/payout-accounts/{id}/primary', [VendorPayoutAccountController::class, 'setPrimary']);
+        Route::delete('/vendor/payout-accounts/{id}', [VendorPayoutAccountController::class, 'destroy']);
     });
 
     // ==========================================

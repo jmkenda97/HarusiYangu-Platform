@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 
 class EventBookingController extends Controller
 {
+    use \App\Traits\ApiResponse;
+
     /**
      * Host sends an Inquiry to a Vendor
      */
@@ -30,7 +32,7 @@ class EventBookingController extends Controller
 
         // SECURITY CHECK: Ensure the authenticated user owns this event
         if ($event->owner_user_id !== auth()->id()) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized. You can only inquire for events you own.'], 403);
+            return $this->errorResponse('Unauthorized. You can only inquire for events you own.', [], 403);
         }
 
         $vendor = Vendor::with('user')->findOrFail($request->vendor_id);
@@ -42,7 +44,7 @@ class EventBookingController extends Controller
             ->exists();
 
         if ($exists) {
-            return response()->json(['success' => false, 'message' => 'You already have an active inquiry/booking with this vendor.'], 422);
+            return $this->errorResponse('You already have an active inquiry/booking with this vendor.', [], 422);
         }
 
         $eventVendor = EventVendor::create([
@@ -65,11 +67,11 @@ class EventBookingController extends Controller
             auth()->user()
         );
 
-        return response()->json(['success' => true, 'message' => 'Inquiry sent successfully.', 'data' => $eventVendor]);
+        return $this->successResponse('Inquiry sent successfully.', $eventVendor);
     }
 
     /**
-     * Vendor sends a Quote back to the Host
+     * Vendor sends a Quote (Professional Invoice Proposal) back to the Host
      */
     public function sendQuote(Request $request, $bookingId)
     {
@@ -82,22 +84,66 @@ class EventBookingController extends Controller
         
         // Ensure only the vendor user can send a quote
         if (auth()->id() !== $booking->vendor->user_id) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+            return $this->errorResponse('Unauthorized.', [], 403);
         }
+
+        // Check if vendor has a primary payout account
+        $primaryAccount = \App\Models\VendorPayoutAccount::where('vendor_id', $booking->vendor_id)
+            ->where('is_primary', true)
+            ->first();
+
+        if (!$primaryAccount) {
+            return $this->errorResponse('Please set up a primary payout account (Bank or Mobile Money) before sending an invoice.', [
+                'payout_account' => ['A primary payout account is required for invoices.']
+            ], 422);
+        }
+
+        // Automatically structure the 30/30/40 Milestones in metadata
+        $milestones = [
+            'phase_1' => [
+                'name' => 'Deposit (30%)',
+                'percentage' => 30,
+                'amount' => $request->quote_amount * 0.30,
+                'description' => 'Required immediately to lock the vendor and the date.',
+                'status' => 'PENDING'
+            ],
+            'phase_2' => [
+                'name' => 'Interim (30%)',
+                'percentage' => 30,
+                'amount' => $request->quote_amount * 0.30,
+                'description' => 'Due closer to the event for material and logistical preparation.',
+                'status' => 'PENDING'
+            ],
+            'phase_3' => [
+                'name' => 'Final (40%)',
+                'percentage' => 40,
+                'amount' => $request->quote_amount * 0.40,
+                'description' => 'Escrow payment. Released after service delivery confirmation.',
+                'status' => 'PENDING'
+            ],
+            'payment_instructions' => [
+                'account_name' => $primaryAccount->account_name,
+                'provider' => $primaryAccount->provider_name,
+                'account_number' => $primaryAccount->account_number,
+                'vendor_phone' => $booking->vendor->phone,
+                'type' => $primaryAccount->account_type
+            ]
+        ];
 
         $booking->update([
             'status' => 'QUOTED',
             'last_quote_amount' => $request->quote_amount,
-            'contract_notes' => $booking->contract_notes . "\n\nQuote Response: " . $request->notes
+            'contract_notes' => $booking->contract_notes . "\n\nInvoice Note: " . $request->notes,
+            'metadata' => array_merge($booking->metadata ?? [], ['milestones' => $milestones])
         ]);
 
         // Notify Host
         NotificationService::notify(
             $booking->event->owner,
-            "New Quote Received",
-            $booking->vendor->business_name . " has sent a quote of TZS " . number_format($request->quote_amount) . " for your event.",
+            "New Invoice Received",
+            $booking->vendor->business_name . " has sent a detailed milestone invoice for TZS " . number_format($request->quote_amount) . ".",
             [
-                'icon' => 'DollarSign', 
+                'icon' => 'FileText', 
                 'event_id' => $booking->event_id, 
                 'booking_id' => $booking->id,
                 'link' => "/events/{$booking->event_id}?tab=vendors"
@@ -105,18 +151,18 @@ class EventBookingController extends Controller
             auth()->user()
         );
 
-        return response()->json(['success' => true, 'message' => 'Quote sent successfully.', 'data' => $booking]);
+        return $this->successResponse('Invoice proposal sent successfully.', $booking);
     }
 
     /**
-     * Host accepts the Quote
+     * Host accepts the Quote/Invoice
      */
     public function acceptQuote(Request $request, $bookingId)
     {
         $booking = EventVendor::with(['event', 'vendor', 'vendor.user', 'budgetItem'])->findOrFail($bookingId);
 
         if (auth()->id() !== $booking->event->owner_user_id) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+            return $this->errorResponse('Unauthorized.', [], 403);
         }
 
         DB::beginTransaction();
@@ -131,15 +177,15 @@ class EventBookingController extends Controller
             if ($booking->budgetItem) {
                 $booking->budgetItem->update([
                     'actual_cost' => $booking->last_quote_amount,
-                    'budget_item_status' => 'APPROVED' // Auto-transition
+                    'budget_item_status' => 'APPROVED'
                 ]);
             }
 
             // Notify Vendor
             NotificationService::notify(
                 $booking->vendor->user,
-                "Quote Accepted!",
-                "Great news! Your quote for " . $booking->event->event_name . " has been accepted. You are now officially booked.",
+                "Invoice Accepted!",
+                "Great news! Your invoice for " . $booking->event->event_name . " has been accepted. Expect your first deposit soon.",
                 [
                     'icon' => 'CheckCircle', 
                     'event_id' => $booking->event_id, 
@@ -150,11 +196,49 @@ class EventBookingController extends Controller
             );
 
             DB::commit();
-            return response()->json(['success' => true, 'message' => 'Quote accepted successfully.', 'data' => $booking]);
+            return $this->successResponse('Invoice accepted successfully.', $booking);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Failed to accept quote.'], 500);
+            return $this->errorResponse('Failed to accept invoice.', [], 500);
         }
+    }
+
+    /**
+     * Fetch a professional invoice view for the host or vendor
+     */
+    public function getInvoice($bookingId)
+    {
+        $booking = EventVendor::with(['event', 'vendor', 'vendor.user', 'payments'])->findOrFail($bookingId);
+
+        // Security check
+        $user = auth()->user();
+        if ($booking->event->owner_user_id !== $user->id && $booking->vendor->user_id !== $user->id && !$user->hasRole('SUPER_ADMIN')) {
+            return $this->errorResponse('Unauthorized.', [], 403);
+        }
+
+        $data = [
+            'vendor' => [
+                'business_name' => $booking->vendor->business_name,
+                'phone' => $booking->vendor->phone,
+                'email' => $booking->vendor->email,
+                'address' => $booking->vendor->address,
+            ],
+            'event' => [
+                'name' => $booking->event->event_name,
+                'date' => $booking->event->event_date,
+                'type' => $booking->event->event_type,
+            ],
+            'milestones' => $booking->metadata['milestones'] ?? [],
+            'payment_history' => \App\Http\Resources\VendorPaymentResource::collection($booking->payments),
+            'summary' => [
+                'total_amount' => (float)$booking->agreed_amount,
+                'amount_paid' => (float)$booking->amount_paid,
+                'balance_due' => (float)$booking->balance_due,
+                'status' => $booking->status
+            ]
+        ];
+
+        return $this->successResponse('Invoice details fetched successfully.', $data);
     }
 
     /**

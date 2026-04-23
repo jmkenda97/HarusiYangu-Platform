@@ -99,6 +99,7 @@ const EventDetailsPage = () => {
     const ProfessionalDocumentModal = ({ doc, event, onClose }) => {
         if (!doc) return null;
         const isInvoice = doc.type === 'Payment Receipt' || doc.type === 'Expense Invoice';
+        const isMilestoneInvoice = doc.type === 'Service Invoice';
         const isNegotiation = doc.type === 'Service Inquiry' || doc.type === 'Request for Quote';
         const businessName = doc.business_name || (doc.type.includes('Inquiry') ? doc.business_name : 'Service Provider');
 
@@ -153,43 +154,86 @@ const EventDetailsPage = () => {
                             </div>
                         </div>
 
-                        {/* Itemized Breakdown Section */}
-                        <div className="space-y-4">
-                            <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 flex justify-between rounded-t-xl border-x border-t border-slate-200 dark:border-slate-800">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Document Breakdown</span>
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount (TZS)</span>
-                            </div>
-                            
-                            <div className="border border-slate-200 dark:border-slate-800 rounded-b-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-                                {/* Row 1: Host Initial Offer */}
-                                <div className="p-6 bg-white dark:bg-slate-900">
-                                    <div className="flex justify-between items-start gap-8">
-                                        <div className="flex-1">
-                                            <p className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-1">Host Initial Bargain</p>
-                                            <p className="font-black text-slate-900 dark:text-white text-base mb-1">{doc.service_name}</p>
-                                            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">"{doc.description || 'Service details provided via platform.'}"</p>
+                        {/* Milestones Structure (Special for Service Invoice) */}
+                        {isMilestoneInvoice && doc.milestones && (
+                            <div className="space-y-4">
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Activity size={14} className="text-brand-600" /> Payment Schedule (30/30/40 Rule)
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {Object.entries(doc.milestones).filter(([k]) => k.startsWith('phase')).map(([key, phase]) => (
+                                        <div key={key} className="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">{phase.name}</p>
+                                            <p className="text-lg font-black text-slate-900 dark:text-white leading-none mb-2">{formatCurrency(phase.amount)}</p>
+                                            <p className="text-[9px] text-slate-500 leading-relaxed font-medium italic">"{phase.description}"</p>
                                         </div>
-                                        <p className="font-black text-lg text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(doc.amount)}</p>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Payout Instructions (Special for Service Invoice) */}
+                        {isMilestoneInvoice && doc.milestones?.payment_instructions && (
+                            <div className="p-6 rounded-2xl bg-brand-50/30 dark:bg-brand-900/10 border border-brand-100 dark:border-brand-900/20">
+                                <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Wallet size={14} /> Official Payout Instructions
+                                </h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    <div>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Provider</p>
+                                        <p className="text-xs font-bold text-slate-900 dark:text-white uppercase">{doc.milestones.payment_instructions.provider}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Account Holder</p>
+                                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{doc.milestones.payment_instructions.account_name}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Account Number / Phone</p>
+                                        <p className="text-xs font-mono font-black text-brand-600 dark:text-brand-400 select-all">{doc.milestones.payment_instructions.account_number}</p>
                                     </div>
                                 </div>
+                            </div>
+                        )}
 
-                                {/* Row 2: Vendor Reply (If exists) */}
-                                {isNegotiation && doc.last_quote && doc.last_quote > 0 && (
-                                    <div className="p-6 bg-slate-50/50 dark:bg-brand-900/5">
+                        {/* Itemized Breakdown Section */}
+                        {!isMilestoneInvoice && (
+                            <div className="space-y-4">
+                                <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 flex justify-between rounded-t-xl border-x border-t border-slate-200 dark:border-slate-800">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Document Breakdown</span>
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount (TZS)</span>
+                                </div>
+                                
+                                <div className="border border-slate-200 dark:border-slate-800 rounded-b-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                                    {/* Row 1: Host Initial Offer */}
+                                    <div className="p-6 bg-white dark:bg-slate-900">
                                         <div className="flex justify-between items-start gap-8">
                                             <div className="flex-1">
-                                                <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Vendor Quote Response</p>
-                                                <p className="font-black text-slate-900 dark:text-white text-base mb-1">Professional Quote Adjustment</p>
-                                                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">
-                                                    "{doc.vendor_description || 'Vendor has provided a quote adjustment for the requested service.'}"
-                                                </p>
+                                                <p className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-1">Host Initial Bargain</p>
+                                                <p className="font-black text-slate-900 dark:text-white text-base mb-1">{doc.service_name}</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">"{doc.description || 'Service details provided via platform.'}"</p>
                                             </div>
-                                            <p className="font-black text-lg text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(doc.last_quote)}</p>
+                                            <p className="font-black text-lg text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(doc.amount)}</p>
                                         </div>
                                     </div>
-                                )}
+
+                                    {/* Row 2: Vendor Reply (If exists) */}
+                                    {isNegotiation && doc.last_quote && doc.last_quote > 0 && (
+                                        <div className="p-6 bg-slate-50/50 dark:bg-brand-900/5">
+                                            <div className="flex justify-between items-start gap-8">
+                                                <div className="flex-1">
+                                                    <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Vendor Quote Response</p>
+                                                    <p className="font-black text-slate-900 dark:text-white text-base mb-1">Professional Quote Adjustment</p>
+                                                    <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">
+                                                        "{doc.vendor_description || 'Vendor has provided a quote adjustment for the requested service.'}"
+                                                    </p>
+                                                </div>
+                                                <p className="font-black text-lg text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(doc.last_quote)}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Status & Summary Footer */}
                         <div className="flex flex-col md:flex-row justify-between items-center gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
@@ -549,19 +593,22 @@ const EventDetailsPage = () => {
         const notesParts = (v.contract_notes || '').split("\n\nQuote Response: ");
         const hostBargainDesc = notesParts[0];
         const vendorQuoteDesc = notesParts[1] || '';
+        
+        const isInvoice = ['QUOTED', 'ACCEPTED', 'COMPLETED'].includes(v.status);
 
         setSelectedDoc({
-            type: 'Service Inquiry',
-            ref_number: `INQ-${v.id.substring(0, 8).toUpperCase()}`,
+            type: isInvoice ? 'Service Invoice' : 'Service Inquiry',
+            ref_number: `${isInvoice ? 'INV' : 'INQ'}-${v.id.substring(0, 8).toUpperCase()}`,
             business_name: v.vendor?.business_name,
             recipient_name: event?.owner?.first_name ? (event.owner.first_name + ' ' + (event.owner.last_name || '')) : 'Verified Host',
             service_name: v.assigned_service,
             description: hostBargainDesc || 'Service inquiry following verified catalog standards.',
-            vendor_description: vendorQuoteDesc, // The Vendor's Reply Notes
-            amount: v.metadata?.target_amount || 0, // Trace from host first bargain
-            last_quote: v.last_quote_amount, // Vendor reply amount
-            is_paid: false,
-            notes: 'This is a preliminary request for pricing. Final agreement is subject to host approval.'
+            vendor_description: vendorQuoteDesc,
+            amount: v.metadata?.target_amount || 0,
+            last_quote: v.last_quote_amount,
+            milestones: v.metadata?.milestones || null,
+            vendor_phone: v.vendor?.phone,
+            is_paid: v.status === 'COMPLETED'
         });
     };
 
@@ -657,7 +704,21 @@ const EventDetailsPage = () => {
 
         setIsSubmitting(true);
         try {
-            await api.post(`/bookings/${selectedVendorBooking.id}/payments`, vendorPaymentData);
+            const formData = new FormData();
+            formData.append('amount', vendorPaymentData.amount);
+            formData.append('milestone', vendorPaymentData.milestone);
+            formData.append('payment_method', vendorPaymentData.payment_method);
+            formData.append('transaction_reference', vendorPaymentData.transaction_reference || '');
+            formData.append('notes', vendorPaymentData.notes || '');
+            
+            if (vendorPaymentData.proof_attachment) {
+                formData.append('proof_attachment', vendorPaymentData.proof_attachment);
+            }
+
+            await api.post(`/bookings/${selectedVendorBooking.id}/payments`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            
             setIsVendorPaymentModalOpen(false);
             fetchVendors();
             fetchEventDetails();

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { AlertCircle, CheckCircle, Clock, Edit, FileText, Loader2, Package, Plus, Save, Search, Trash2, Upload, X } from 'lucide-react';
 import { PageLoader, SkeletonCard, SkeletonTable } from '../components/SkeletonLoader';
+import VendorPayoutAccounts from '../components/VendorPayoutAccounts';
 
 const SERVICE_TYPES = ['CATERING', 'DECORATION', 'MC', 'PHOTOGRAPHY', 'VIDEOGRAPHY', 'SOUND', 'TRANSPORT', 'TENT_CHAIRS', 'CAKE', 'MAKEUP', 'SECURITY', 'VENUE', 'PRINTING', 'OTHER'];
 const DOCUMENT_TYPES = ['BUSINESS_LICENSE', 'BRELA_CERTIFICATE', 'TIN_CERTIFICATE', 'PORTFOLIO', 'INSURANCE', 'OTHER'];
@@ -119,7 +120,7 @@ const VendorProfilePage = () => {
     useEffect(() => {
         const queryParams = new URLSearchParams(window.location.search);
         const tab = queryParams.get('tab');
-        if (tab && ['profile', 'services', 'documents'].includes(tab)) {
+        if (tab && ['profile', 'services', 'documents', 'payouts'].includes(tab)) {
             setActiveTab(tab);
         }
     }, []);
@@ -362,19 +363,19 @@ const VendorProfilePage = () => {
                 )}
             </div>
 
-            <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800">
-                {['profile', 'services', 'documents'].map((tab) => (
+            <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800 overflow-x-auto whitespace-nowrap scrollbar-hide">
+                {['profile', 'services', 'documents', 'payouts'].map((tab) => (
                     <button 
                         key={tab} 
                         type="button" 
                         onClick={() => setActiveTab(tab)} 
-                        className={`border-b-2 pb-3 text-sm font-bold capitalize transition-colors ${
+                        className={`border-b-2 pb-3 text-sm font-bold capitalize transition-colors flex-shrink-0 px-2 ${
                             activeTab === tab 
                                 ? 'border-brand-600 text-brand-600' 
                                 : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
                         }`}
                     >
-                        {tab}
+                        {tab === 'payouts' ? 'Payout Details' : tab}
                     </button>
                 ))}
             </div>
@@ -544,6 +545,12 @@ const VendorProfilePage = () => {
                             ))}
                         </div>
                     )}
+                </div>
+            )}
+
+            {activeTab === 'payouts' && (
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 shadow-sm">
+                    <VendorPayoutAccounts showToast={showToast} />
                 </div>
             )}
 

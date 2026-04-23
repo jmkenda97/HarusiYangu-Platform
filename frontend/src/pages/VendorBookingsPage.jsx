@@ -43,7 +43,7 @@ const QuoteModal = ({ inquiry, onClose, onSuccess }) => {
             onSuccess();
             onClose();
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to send quote');
+            alert(err.response?.data?.message || 'Failed to send invoice');
         } finally {
             setLoading(false);
         }
@@ -53,7 +53,10 @@ const QuoteModal = ({ inquiry, onClose, onSuccess }) => {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in duration-200">
                 <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
-                    <h3 className="font-bold text-slate-900 dark:text-white">Send Price Quote</h3>
+                    <div>
+                        <h3 className="font-bold text-slate-900 dark:text-white uppercase tracking-tight text-sm">Send Milestone Invoice</h3>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Professional Service Proposal</p>
+                    </div>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -61,44 +64,32 @@ const QuoteModal = ({ inquiry, onClose, onSuccess }) => {
                     <div className="space-y-3 p-4 bg-brand-50/50 dark:bg-brand-900/10 rounded-2xl border border-brand-100 dark:border-brand-900/30">
                         <div className="flex items-center gap-2 text-brand-600 dark:text-brand-400">
                             <Info size={16} />
-                            <p className="text-[10px] font-black uppercase tracking-widest">Host's Requirements</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest">Platform Automated Rules</p>
                         </div>
-                        <div>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Requested Service:</p>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white">{inquiry.assigned_service}</p>
-                        </div>
-                        {inquiry.metadata?.target_amount > 0 && (
-                            <div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Host's Bargain Price:</p>
-                                <p className="text-sm font-black text-emerald-600">{formatCurrency(inquiry.metadata.target_amount)}</p>
-                            </div>
-                        )}
-                        {inquiry.contract_notes && (
-                            <div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Host's Description:</p>
-                                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 italic leading-relaxed">"{inquiry.contract_notes}"</p>
-                            </div>
-                        )}
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                            Your quote will be automatically split into <span className="font-bold text-brand-600">30/30/40 milestones</span>. 
+                            Ensure your Payout Accounts are set up in your profile.
+                        </p>
                     </div>
 
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Your Quote Amount (TZS)</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Total Service Amount (TZS)</label>
                             <input 
                                 type="number" 
                                 required
-                                className="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-2.5 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                                placeholder="Enter your price..."
+                                className="w-full border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 bg-white dark:bg-slate-800 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all"
+                                placeholder="Total project cost"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Notes to Host</label>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Invoice Message / Description</label>
                             <textarea 
-                                className="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-2.5 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                                className="w-full border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 bg-white dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all"
                                 rows="3"
-                                placeholder="Explain what's included in this price..."
+                                placeholder="What is included in this price?"
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
                             />
@@ -106,9 +97,9 @@ const QuoteModal = ({ inquiry, onClose, onSuccess }) => {
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
-                        <button type="submit" disabled={loading} className="flex-1 bg-brand-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-brand-700 shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
-                            {loading ? <Loader2 size={16} className="animate-spin" /> : 'Submit Quote'}
+                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                        <button type="submit" disabled={loading} className="flex-[2] bg-brand-600 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-brand-700 shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                            {loading ? <Loader2 size={16} className="animate-spin" /> : 'Send Official Invoice'}
                         </button>
                     </div>
                 </form>
@@ -117,9 +108,10 @@ const QuoteModal = ({ inquiry, onClose, onSuccess }) => {
     );
 };
 
-const ProfessionalDocumentModal = ({ doc, businessName, onClose }) => {
+const ProfessionalDocumentModal = ({ doc, businessName, onClose, onConfirmReceipt }) => {
     if (!doc) return null;
     const isInvoice = doc.type === 'Payment Receipt';
+    const isMilestoneInvoice = doc.type === 'Service Invoice';
     
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
@@ -139,17 +131,17 @@ const ProfessionalDocumentModal = ({ doc, businessName, onClose }) => {
                 }
                 `}
             </style>
-            <div className="bg-white dark:bg-slate-900 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col border border-slate-200 dark:border-slate-800 print-container" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-slate-900 w-full max-w-3xl max-h-[95vh] overflow-y-auto rounded-3xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col border border-slate-200 dark:border-slate-800 print-container" onClick={e => e.stopPropagation()}>
                 {/* Document Content Area */}
                 <div id="document-content" className="p-8 md:p-12 space-y-8 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                     {/* Header */}
                     <div className="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-8">
                         <div>
                             <h1 className="font-black text-2xl text-brand-600 tracking-tighter uppercase">HarusiYangu</h1>
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">{isInvoice ? 'Official Payment Receipt' : 'Service Inquiry Request'}</p>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">{isInvoice ? 'Official Payment Receipt' : isMilestoneInvoice ? 'Milestone Service Invoice' : 'Service Inquiry Request'}</p>
                         </div>
                         <div className="text-right">
-                            <h2 className={`text-2xl font-black uppercase tracking-tighter ${isInvoice ? 'text-emerald-600' : 'text-brand-600'}`}>{isInvoice ? 'RECEIPT' : 'INQUIRY'}</h2>
+                            <h2 className={`text-2xl font-black uppercase tracking-tighter ${isInvoice ? 'text-emerald-600' : 'text-brand-600'}`}>{isInvoice ? 'RECEIPT' : isMilestoneInvoice ? 'INVOICE' : 'INQUIRY'}</h2>
                             <p className="text-slate-500 dark:text-slate-400 font-bold text-xs mt-1">Ref: {doc.ref_number}</p>
                             <p className="text-slate-400 font-bold text-[9px] uppercase mt-1">{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                         </div>
@@ -160,7 +152,7 @@ const ProfessionalDocumentModal = ({ doc, businessName, onClose }) => {
                         <div className="space-y-1">
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">From: Service Provider</p>
                             <p className="font-black text-slate-900 dark:text-white text-base">{businessName || 'N/A'}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">Verified Marketplace Vendor</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{doc.vendor_phone || 'Verified Marketplace Vendor'}</p>
                         </div>
                         <div className="text-right space-y-1">
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">To: Event Host</p>
@@ -169,56 +161,116 @@ const ProfessionalDocumentModal = ({ doc, businessName, onClose }) => {
                         </div>
                     </div>
 
-                    {/* Description Table-like Section */}
-                    <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-                        <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 flex justify-between border-b border-slate-200 dark:border-slate-800">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Service Description</span>
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount (TZS)</span>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div className="flex justify-between items-start gap-8">
-                                <div className="flex-1">
-                                    <p className="font-black text-slate-900 dark:text-white text-lg mb-1">{doc.service_name}</p>
-                                    <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">"{doc.description || 'Service inquiry details provided via platform.'}"</p>
-                                </div>
-                                <p className="font-black text-xl text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(doc.amount)}</p>
+                    {/* Milestones Structure (Special for Service Invoice) */}
+                    {isMilestoneInvoice && doc.milestones && (
+                        <div className="space-y-4">
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <Activity size={14} className="text-brand-600" /> Payment Schedule (30/30/40 Rule)
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                {Object.entries(doc.milestones).filter(([k]) => k.startsWith('phase')).map(([key, phase]) => (
+                                    <div key={key} className="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">{phase.name}</p>
+                                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none mb-2">{formatCurrency(phase.amount)}</p>
+                                        <p className="text-[9px] text-slate-500 leading-relaxed font-medium italic">"{phase.description}"</p>
+                                    </div>
+                                ))}
                             </div>
-
-                            {doc.last_quote && (
-                                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Negotiation Quote</p>
-                                    <p className="font-black text-base text-brand-600">{formatCurrency(doc.last_quote)}</p>
-                                </div>
-                            )}
                         </div>
-                    </div>
+                    )}
+
+                    {/* Payout Instructions (Special for Service Invoice) */}
+                    {isMilestoneInvoice && doc.milestones?.payment_instructions && (
+                        <div className="p-6 rounded-2xl bg-brand-50/30 dark:bg-brand-900/10 border border-brand-100 dark:border-brand-900/20">
+                            <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <Wallet size={14} /> Official Payout Instructions
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                <div>
+                                    <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Provider</p>
+                                    <p className="text-xs font-bold text-slate-900 dark:text-white uppercase">{doc.milestones.payment_instructions.provider}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Account Holder</p>
+                                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{doc.milestones.payment_instructions.account_name}</p>
+                                </div>
+                                <div className="col-span-2">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Account Number / Phone</p>
+                                    <p className="text-xs font-mono font-black text-brand-600 dark:text-brand-400 select-all">{doc.milestones.payment_instructions.account_number}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Description Table-like Section */}
+                    {!isMilestoneInvoice && (
+                        <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                            <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 flex justify-between border-b border-slate-200 dark:border-slate-800">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Service Description</span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount (TZS)</span>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <div className="flex justify-between items-start gap-8">
+                                    <div className="flex-1">
+                                        <p className="font-black text-slate-900 dark:text-white text-lg mb-1">{doc.service_name}</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">"{doc.description || 'Service inquiry details provided via platform.'}"</p>
+                                    </div>
+                                    <p className="font-black text-xl text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(doc.amount)}</p>
+                                </div>
+
+                                {doc.last_quote && (
+                                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Negotiation Quote</p>
+                                        <p className="font-black text-base text-brand-600">{formatCurrency(doc.last_quote)}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Status & Summary Footer */}
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
                         <div className={`inline-flex items-center gap-2.5 px-4 py-2 rounded-full border-2 ${isInvoice ? 'border-emerald-500/20 bg-emerald-50/5 text-emerald-600' : 'border-brand-500/20 bg-brand-50/5 text-brand-600'}`}>
                             <div className={`h-2 w-2 rounded-full animate-pulse ${isInvoice ? 'bg-emerald-500' : 'bg-brand-500'}`}></div>
-                            <span className="text-[10px] font-black uppercase tracking-widest">{isInvoice ? 'Payment Verified' : 'Status: Inquiry Pending'}</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest">{isInvoice ? 'Payment Verified' : isMilestoneInvoice ? 'Invoice Active' : 'Status: Inquiry Pending'}</span>
                         </div>
 
                         <div className="bg-slate-900 dark:bg-brand-600 text-white rounded-2xl px-8 py-4 text-center min-w-[200px] shadow-lg shadow-brand-500/10">
-                            <p className="text-[8px] font-black uppercase tracking-widest mb-1 opacity-60">Total Document Value</p>
+                            <p className="text-[8px] font-black uppercase tracking-widest mb-1 opacity-60">{isMilestoneInvoice ? 'Total Agreed Price' : 'Total Document Value'}</p>
                             <p className="text-2xl font-black">{formatCurrency(doc.amount)}</p>
                         </div>
                     </div>
 
                     <div className="text-center pt-8">
-                        <p className="text-[9px] text-slate-400 font-medium italic">Thank you for choosing HarusiYangu Marketplace. This is a system-generated document.</p>
+                        <p className="text-[9px] text-slate-400 font-medium italic">Thank you for choosing HarusiYangu Marketplace. This is a system-generated document for legal and financial reference.</p>
                     </div>
                 </div>
 
                 {/* Controls - HIDDEN DURING PRINT */}
-                <div className="p-6 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-700 flex justify-center gap-3 no-print">
-                    <button onClick={() => window.print()} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-slate-100 transition-all shadow-sm">
-                        <Printer size={14} /> Print / Save as PDF
-                    </button>
-                    <button onClick={onClose} className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-10 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all shadow-lg">
-                        Close
-                    </button>
+                <div className="p-6 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-700 flex flex-col items-center gap-4 no-print">
+                    <div className="flex justify-center gap-3 w-full">
+                        <button onClick={() => window.print()} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-slate-100 transition-all shadow-sm">
+                            <Printer size={14} /> Print / Save as PDF
+                        </button>
+                        <button onClick={onClose} className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-10 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all shadow-lg">
+                            Close
+                        </button>
+                    </div>
+                    
+                    {/* CONFIRM RECEIPT BUTTON (For Vendors viewing a receipt) */}
+                    {isInvoice && !doc.is_vendor_confirmed && onConfirmReceipt && (
+                        <div className="w-full pt-4 border-t border-slate-200 dark:border-slate-700">
+                            <div className="flex flex-col items-center p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-200 dark:border-emerald-800 text-center">
+                                <p className="text-xs font-bold text-emerald-800 dark:text-emerald-400 mb-3">Have you seen this money in your phone or bank account?</p>
+                                <button 
+                                    onClick={onConfirmReceipt}
+                                    className="w-full bg-emerald-600 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 transition-all active:scale-95"
+                                >
+                                    <CheckCircle size={14} /> I Have Received This Payment
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -264,15 +316,19 @@ const VendorBookingsPage = () => {
     };
 
     const openInquiryDoc = (inquiry) => {
+        const isInvoice = ['QUOTED', 'ACCEPTED', 'COMPLETED'].includes(inquiry.status);
+        
         setSelectedDoc({
-            type: 'Service Inquiry',
-            ref_number: `INQ-${inquiry.id.substring(0, 8).toUpperCase()}`,
+            type: isInvoice ? 'Service Invoice' : 'Service Inquiry',
+            ref_number: `${isInvoice ? 'INV' : 'INQ'}-${inquiry.id.substring(0, 8).toUpperCase()}`,
             recipient_name: inquiry.host_name,
             service_name: inquiry.assigned_service,
             description: inquiry.contract_notes,
-            amount: inquiry.metadata?.target_amount || 0,
+            amount: inquiry.last_quote_amount || inquiry.metadata?.target_amount || 0,
             last_quote: inquiry.last_quote_amount,
-            is_paid: false
+            milestones: inquiry.metadata?.milestones || null,
+            vendor_phone: data?.profile?.phone,
+            is_paid: inquiry.status === 'COMPLETED'
         });
     };
 
@@ -285,8 +341,23 @@ const VendorBookingsPage = () => {
             description: `Payment for event services recorded on ${new Date(payment.payment_date).toLocaleDateString()}`,
             amount: payment.amount,
             is_paid: true,
-            notes: `Reference: ${payment.transaction_reference || 'N/A'}. This is a verified transaction.`
+            is_released: payment.is_released,
+            is_vendor_confirmed: payment.is_vendor_confirmed,
+            payment_id: payment.id,
+            notes: `Reference: ${payment.transaction_reference || 'N/A'}. This is a ${payment.is_released ? 'direct' : 'escrow'} transaction.`
         });
+    };
+
+    const handleConfirmReceipt = async (paymentId) => {
+        if (!window.confirm('Confirm that you have received this money in your account?')) return;
+        try {
+            await api.put(`/payments/${paymentId}/confirm`);
+            fetchData();
+            setSelectedDoc(null);
+            alert('Payment receipt confirmed successfully.');
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to confirm receipt');
+        }
     };
 
     // Filtered Data based on tab
@@ -342,6 +413,7 @@ const VendorBookingsPage = () => {
                     doc={selectedDoc} 
                     businessName={data?.profile?.business_name} 
                     onClose={() => setSelectedDoc(null)} 
+                    onConfirmReceipt={() => handleConfirmReceipt(selectedDoc.payment_id)}
                 />
             )}
 
