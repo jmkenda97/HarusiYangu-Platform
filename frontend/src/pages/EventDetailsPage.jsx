@@ -247,8 +247,8 @@ const EventDetailsPage = () => {
     const fetchLedger = async () => {
         try {
             const res = await api.get(`/events/${id}/ledger?page=${ledgerPage}`);
-            setLedger(res.data.data.data);
-            setLedgerTotal(res.data.data.total);
+            setLedger(res.data.data);
+            setLedgerTotal(res.data.meta.total);
         } catch (err) { console.error("Ledger fetch error", err); }
     };
 
@@ -417,7 +417,7 @@ const EventDetailsPage = () => {
 
     const fetchCommittee = async () => {
         try {
-            const res = await api.get(`/events/${id}/committee`);
+            const res = await api.get(`/events/${id}/committee-members`);
             setCommittee(res.data.data);
             setCommitteePage(1);
         } catch (err) {
@@ -1046,7 +1046,8 @@ const EventDetailsPage = () => {
                                             <th className="px-6 py-4">Type</th>
                                             <th className="px-6 py-4 text-right">Amount</th>
                                             <th className="px-6 py-4 text-center">Verification</th>
-                                        </tr>                                    </thead>
+                                        </tr>
+                                    </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                         {isTabLoading ? (
                                             <tr>
@@ -1157,7 +1158,7 @@ const EventDetailsPage = () => {
                             <div className="relative z-10 text-center md:text-left">
                                 <h3 className="text-2xl font-black tracking-tight">Hire Professional Vendors</h3>
                                 <p className="text-brand-100 text-sm mt-1 max-w-md">Browse our verified catalog of photographers, decorators, caterers and more.</p>
-                                <button onClick={() => navigate('/vendor-catalog')} className="mt-6 bg-white text-brand-700 px-8 py-3 rounded-2xl font-black hover:bg-slate-50 transition-all flex items-center gap-3 shadow-lg shadow-black/20 text-sm uppercase tracking-widest"><Search size={18} /> Visit Catalog</button>
+                                <button onClick={() => navigate('/vendors')} className="mt-6 bg-white text-brand-700 px-8 py-3 rounded-2xl font-black hover:bg-slate-50 transition-all flex items-center gap-3 shadow-lg shadow-black/20 text-sm uppercase tracking-widest"><Search size={18} /> Visit Catalog</button>
                             </div>
                             <div className="absolute -right-10 -bottom-10 opacity-20 pointer-events-none transform rotate-12"><Briefcase size={200} /></div>
                         </div>

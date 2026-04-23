@@ -21,7 +21,6 @@ class EventController extends Controller
         $user = $request->user();
 
         // FIX: STRICT FILTERING
-        // We explicitly exclude archived events so deleted ones NEVER come back.
         $query = Event::with('owner')->whereNull('archived_at');
 
         if ($user->role === 'SUPER_ADMIN') {
@@ -36,21 +35,28 @@ class EventController extends Controller
             });
         }
 
-        $events = $query->with(['committee', 'contacts.pledge'])->orderBy('created_at', 'desc')->get();
+        // Apply filters from spec
+        if ($request->has('status')) {
+            $query->where('event_status', $request->status);
+        }
 
-        return response()->json([
-            'success' => true,
-            'data' => $events
+        $events = $query->with(['committee', 'contacts.pledge'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->get('per_page', 20));
+
+        return $this->successResponse('Events fetched successfully', $events->items(), [
+            'page' => $events->currentPage(),
+            'per_page' => $events->perPage(),
+            'total' => $events->total(),
+            'total_pages' => $events->lastPage(),
         ]);
     }
-
-    
 
     public function store(Request $request)
     {
         $request->validate([
             'event_name' => 'required|string|max:255',
-            'event_type' => ['required', Rule::in(['KITCHEN_PARTY', 'SENDOFF', 'WEDDING', 'BAG_PARTY', 'BRIDAL_SHOWER', 'BRIDAL_SHOWER', 'ENGAGEMENT', 'OTHER'])],
+            'event_type' => ['required', Rule::in(['KITCHEN_PARTY', 'SENDOFF', 'WEDDING', 'BAG_PARTY', 'BRIDAL_SHOWER', 'ENGAGEMENT', 'OTHER'])],
             'event_date' => 'required|date|after:today',
             'start_time' => 'nullable|date_format:H:i',
             'end_time' => 'nullable|date_format:H:i|after:start_time',
@@ -62,7 +68,6 @@ class EventController extends Controller
             'region' => 'nullable|string|max:100',
             'district' => 'nullable|string|max:100',
             'target_budget' => 'required|numeric|min:0',
-            // FIX: Changed 'contingENCY_AMOUNT' to 'contingency_amount'
             'contingency_amount' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
         ]);
@@ -85,10 +90,9 @@ class EventController extends Controller
                     'region' => $request->region,
                     'district' => $request->district,
                     'target_budget' => $request->target_budget,
-                    // This now matches the validated input
                     'contingency_amount' => $request->contingency_amount ?? 0,
                     'description' => $request->description,
-                    'event_status' => 'PLANNING',
+                    'event_status' => 'DRAFT',
                     'currency_code' => 'TZS',
                 ]);
 
@@ -108,28 +112,20 @@ class EventController extends Controller
                 return $event;
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Event created successfully',
-                'data' => $event
-            ], 201);
+            return $this->successResponse('Event created successfully', $event, [], 201);
         } catch (\Exception $e) {
             \Log::error('Event Creation Failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create event: ' . $e->getMessage()
-            ], 500);
+            return $this->errorResponse('Failed to create event: ' . $e->getMessage(), [], 500);
         }
     }
 
     public function show($id)
     {
-        // Ensure we don't show deleted events
         $event = Event::with([
             'owner',
             'committee.user',
             'contacts.pledge',
-            'wallet' // Added for perfect financial visibility
+            'wallet'
         ])->whereNull('archived_at')->findOrFail($id);
 
         $user = auth()->user();
@@ -137,86 +133,43 @@ class EventController extends Controller
         $isCommittee = $event->committee->contains('user_id', $user->id);
 
         if (!$isOwner && !$isCommittee && $user->role !== 'SUPER_ADMIN') {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            return $this->errorResponse('Unauthorized', [], 403);
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => $event
-        ]);
+        return $this->successResponse('Event fetched successfully', $event);
     }
 
     public function update(Request $request, $id)
     {
-        // Ensure we don't update deleted events
         $event = Event::whereNull('archived_at')->findOrFail($id);
-
+        
         if ($event->owner_user_id !== auth()->id() && auth()->user()->role !== 'SUPER_ADMIN') {
-            return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+             return $this->errorResponse('Unauthorized', [], 403);
         }
 
         $request->validate([
             'event_name' => 'sometimes|required|string|max:255',
-            'event_date' => 'sometimes|required|date',
-            'start_time' => 'nullable|date_format:H:i',
-            'end_time' => 'nullable|date_format:H:i|after:start_time',
-            'groom_name' => 'nullable|string|max:255',
-            'bride_name' => 'nullable|string|max:255',
-            'celebrant_name' => 'nullable|string|max:255',
-            'venue_name' => 'nullable|string|max:255',
-            'venue_address' => 'nullable|string',
-            'region' => 'nullable|string|max:100',
-            'district' => 'nullable|string|max:100',
+            'event_status' => 'sometimes|required|string',
             'target_budget' => 'sometimes|required|numeric|min:0',
-            'contingency_amount' => 'nullable|numeric|min:0',
-            'description' => 'nullable|string',
+            'contingency_amount' => 'sometimes|required|numeric|min:0',
         ]);
 
-        $event->update($request->only([
-            'event_name',
-            'event_date',
-            'start_time',
-            'end_time',
-            'groom_name',
-            'bride_name',
-            'celebrant_name',
-            'venue_name',
-            'venue_address',
-            'region',
-            'district',
-            'target_budget',
-            // FIX: Changed 'contig_amount' to 'contingency_amount'
-            'contingency_amount',
-            'description'
-        ]));
+        $event->update($request->all());
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Event updated successfully',
-            'data' => $event
-        ]);
+        return $this->successResponse('Event updated successfully', $event);
     }
 
     public function destroy(Request $request, $id)
     {
-        // FIX: HARD DELETE ONLY
-        // No fallback to soft delete. We remove the row permanently.
         $event = Event::whereNull('archived_at')->findOrFail($id);
 
         if ($event->owner_user_id !== auth()->id() && auth()->user()->role !== 'SUPER_ADMIN') {
-            return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+            return $this->errorResponse('Unauthorized', [], 403);
         }
 
-        // Financial Lock Check (Optional but recommended)
-        // We skip this for now to ensure the delete works as requested.
+        $event->update(['archived_at' => now()]);
 
-        // HARD DELETE
-        $event->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Event deleted permanently'
-        ]);
+        return $this->successResponse('Event archived successfully');
     }
 
 

@@ -47,13 +47,13 @@ export const AuthProvider = ({ children }) => {
             });
 
             if (response.data.success) {
-                const { user: userData, token } = response.data.data;
+                const { user: userData, access_token } = response.data.data;
 
                 // Update State
                 setUser(userData);
 
                 // Persist Data
-                localStorage.setItem('harusiyangu_token', token);
+                localStorage.setItem('harusiyangu_token', access_token);
                 localStorage.setItem('harusiyangu_user', JSON.stringify(userData));
 
                 return { success: true };

@@ -48,12 +48,9 @@ class EventBudgetController extends Controller
         // Also fetch categories for the form
         $categories = BudgetCategory::all();
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'items' => $items,
-                'categories' => $categories
-            ]
+        return $this->successResponse('Budget items fetched successfully', [
+            'items' => $items,
+            'categories' => $categories
         ]);
     }
 
@@ -87,13 +84,9 @@ class EventBudgetController extends Controller
                 'priority_level' => $request->priority_level ?? 3,
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Budget item added',
-                'data' => $item
-            ], 201);
+            return $this->successResponse('Budget item added', $item, [], 201);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return $this->errorResponse($e->getMessage(), [], 500);
         }
     }
 
@@ -115,7 +108,7 @@ class EventBudgetController extends Controller
 
         $item->update($request->only(['category_id', 'item_name', 'estimated_cost', 'description', 'budget_item_status']));
 
-        return response()->json(['success' => true, 'data' => $item]);
+        return $this->successResponse('Budget item updated successfully', $item);
     }
 
     public function destroy(Request $request, $eventId, $id)
@@ -128,7 +121,7 @@ class EventBudgetController extends Controller
 
         $item->delete();
 
-        return response()->json(['success' => true, 'message' => 'Item deleted']);
+        return $this->successResponse('Budget item deleted successfully');
     }
 
     public function export($eventId)

@@ -29,38 +29,9 @@ class EventVendorController extends Controller
                 'payments'
             ])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($eventVendor) {
-                // Calculate totals for each assignment
-                $totalPaid = $eventVendor->payments()->where('payment_status', 'SUCCESS')->sum('amount');
+            ->paginate($request->get('per_page', 20));
 
-                return [
-                    'id' => $eventVendor->id,
-                    'vendor' => $eventVendor->vendor,
-                    'assigned_service' => $eventVendor->assigned_service,
-                    'status' => $eventVendor->status,
-                    'last_quote_amount' => $eventVendor->last_quote_amount,
-                    'agreed_amount' => $eventVendor->agreed_amount,
-                    'amount_paid' => $eventVendor->amount_paid,
-                    'balance_due' => $eventVendor->balance_due,
-                    'contract_notes' => $eventVendor->contract_notes,
-                    'metadata' => $eventVendor->metadata,
-                    'start_date' => $eventVendor->start_date,
-                    'end_date' => $eventVendor->end_date,
-                    'created_at' => $eventVendor->created_at,
-                    'updated_at' => $eventVendor->updated_at,
-                    'summary' => [
-                        'total_agreed' => (float) $eventVendor->agreed_amount,
-                        'total_paid' => (float) $eventVendor->amount_paid,
-                        'total_balance' => (float) $eventVendor->balance_due,
-                    ]
-                ];
-            });
-
-        return response()->json([
-            'success' => true,
-            'data' => $eventVendors
-        ]);
+        return $this->paginatedResponse($eventVendors, \App\Http\Resources\EventVendorResource::class, 'Event vendors fetched successfully');
     }
 
     /**
@@ -85,17 +56,11 @@ class EventVendorController extends Controller
         // Check vendor exists and is ACTIVE
         $vendor = Vendor::find($request->vendor_id);
         if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vendor not found'
-            ], 404);
+            return $this->errorResponse('Vendor not found', [], 404);
         }
 
         if ($vendor->status !== 'ACTIVE') {
-            return response()->json([
-                'success' => false,
-                'message' => 'This vendor is not available for assignment. Only approved vendors can be assigned.'
-            ], 422);
+            return $this->errorResponse('This vendor is not available for assignment. Only approved vendors can be assigned.', [], 422);
         }
 
         // Check vendor not already assigned to this event for the same service
@@ -105,15 +70,12 @@ class EventVendorController extends Controller
             ->first();
 
         if ($existingAssignment) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This vendor is already assigned to this event for the specified service.'
-            ], 422);
+            return $this->errorResponse('This vendor is already assigned to this event for the specified service.', [], 422);
         }
 
         try {
-            DB::transaction(function () use ($request, $event) {
-                EventVendor::create([
+            $eventVendor = DB::transaction(function () use ($request, $event) {
+                return EventVendor::create([
                     'id' => Str::uuid(),
                     'event_id' => $event->id,
                     'vendor_id' => $request->vendor_id,
@@ -128,17 +90,10 @@ class EventVendorController extends Controller
                 ]);
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Vendor assigned to event successfully'
-            ], 201);
+            return $this->successResponse('Vendor assigned to event successfully', new \App\Http\Resources\EventVendorResource($eventVendor), [], 201);
         } catch (\Exception $e) {
             Log::error('Vendor Assignment Failed: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to assign vendor: ' . $e->getMessage()
-            ], 500);
+            return $this->errorResponse('Failed to assign vendor: ' . $e->getMessage(), [], 500);
         }
     }
 
@@ -149,12 +104,10 @@ class EventVendorController extends Controller
     {
         $event = Event::findOrFail($eventId);
 
-        // Find the EventVendor and verify it belongs to this event
         $eventVendor = EventVendor::where('id', $id)
             ->where('event_id', $eventId)
             ->firstOrFail();
 
-        // Authorize using EventPolicy::manageVendors
         $this->authorize('manageVendors', $event);
 
         $request->validate([
@@ -165,7 +118,6 @@ class EventVendorController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
         ]);
 
-        // If agreed_amount changes, recalculate balance_due
         if ($request->has('agreed_amount')) {
             $newAgreedAmount = $request->agreed_amount;
             $newBalanceDue = $newAgreedAmount - $eventVendor->amount_paid;
@@ -174,9 +126,7 @@ class EventVendorController extends Controller
             $eventVendor->balance_due = $newBalanceDue;
         }
 
-        // Update other fields
         if ($request->has('assigned_service')) {
-            // Check for duplicate assignment with same service
             $existingAssignment = EventVendor::where('event_id', $eventId)
                 ->where('vendor_id', $eventVendor->vendor_id)
                 ->where('assigned_service', $request->assigned_service)
@@ -184,10 +134,7 @@ class EventVendorController extends Controller
                 ->first();
 
             if ($existingAssignment) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This vendor is already assigned to this event for the specified service.'
-                ], 422);
+                return $this->errorResponse('This vendor is already assigned to this event for the specified service.', [], 422);
             }
 
             $eventVendor->assigned_service = $request->assigned_service;
@@ -207,11 +154,7 @@ class EventVendorController extends Controller
 
         $eventVendor->save();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Vendor assignment updated successfully',
-            'data' => $eventVendor
-        ]);
+        return $this->successResponse('Vendor assignment updated successfully', new \App\Http\Resources\EventVendorResource($eventVendor));
     }
 
     /**
@@ -221,27 +164,18 @@ class EventVendorController extends Controller
     {
         $event = Event::findOrFail($eventId);
 
-        // Find the EventVendor and verify it belongs to this event
         $eventVendor = EventVendor::where('id', $id)
             ->where('event_id', $eventId)
             ->firstOrFail();
 
-        // Authorize using EventPolicy::manageVendors
         $this->authorize('manageVendors', $event);
 
-        // Check no payments have been made
         if ($eventVendor->amount_paid > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete this vendor assignment. Payments have been recorded. Remove payments first.'
-            ], 422);
+            return $this->errorResponse('Cannot delete this vendor assignment. Payments have been recorded. Remove payments first.', [], 422);
         }
 
         $eventVendor->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Vendor assignment removed successfully'
-        ]);
+        return $this->successResponse('Vendor assignment removed successfully');
     }
 }

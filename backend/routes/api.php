@@ -77,11 +77,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/ledger', [WalletLedgerController::class, 'index']);
             
             // --- COMMITTEE ROUTES ---
-            Route::get('/committee', [EventCommitteeController::class, 'index']);
-            Route::post('/committee', [EventCommitteeController::class, 'store']);
-            Route::put('/committee/{memberId}', [EventCommitteeController::class, 'update']);
-            Route::delete('/committee/{memberId}', [EventCommitteeController::class, 'destroy']);
-            Route::get('/committe/export', [EventCommitteeController::class, 'export']);
+            Route::get('/committee-members', [EventCommitteeController::class, 'index']);
+            Route::post('/committee-members', [EventCommitteeController::class, 'store']);
+            Route::put('/committee-members/{memberId}', [EventCommitteeController::class, 'update']);
+            Route::delete('/committee-members/{memberId}', [EventCommitteeController::class, 'destroy']);
+            Route::get('/committee-members/export', [EventCommitteeController::class, 'export']);
 
             // Contributors (Contacts + Pledges)
             Route::post('/contributors', [EventContributorController::class, 'store']);
@@ -113,10 +113,30 @@ Route::prefix('v1')->group(function () {
         });
 
         // ==========================================
-        // VENDOR CATALOG ROUTES (Task #4)
-        // Public vendor browsing for all authenticated users
+        // VENDOR ROUTES (Catalog & Self-Management)
         // ==========================================
-        Route::prefix('vendor-catalog')->group(function () {
+        Route::prefix('vendors')->group(function () {
+            // 1. Specific Private Routes (Must be above {id} to avoid collision)
+            Route::get('/dashboard', [VendorController::class, 'getDashboard']);
+            Route::get('/profile', [VendorController::class, 'getProfile']);
+            Route::post('/profile', [VendorController::class, 'createProfile']);
+            Route::put('/profile', [VendorController::class, 'updateProfile']);
+
+            // 2. Services Management
+            Route::get('/services', [VendorServiceController::class, 'index']);
+            Route::post('/services', [VendorServiceController::class, 'store']);
+            Route::put('/services/{id}', [VendorServiceController::class, 'update']);
+            Route::delete('/services/{id}', [VendorServiceController::class, 'destroy']);
+            Route::put('/services/{id}/review', [VendorServiceController::class, 'adminReview']);
+
+            // 3. Documents Management
+            Route::get('/documents', [VendorDocumentController::class, 'index']);
+            Route::post('/documents', [VendorDocumentController::class, 'store']);
+            Route::put('/documents/{id}', [VendorDocumentController::class, 'update']);
+            Route::delete('/documents/{id}', [VendorDocumentController::class, 'destroy']);
+            Route::get('/documents/{id}/view', [VendorDocumentController::class, 'serveFile']);
+
+            // 4. Catalog Public Routes (Must be at the bottom)
             Route::get('/', [VendorCatalogController::class, 'index']);
             Route::get('/{id}', [VendorCatalogController::class, 'show']);
         });
@@ -136,31 +156,6 @@ Route::prefix('v1')->group(function () {
             Route::put('/{vendorId}/services/{serviceId}/approve', [AdminVendorController::class, 'approveService']);
             Route::put('/{vendorId}/services/{serviceId}/reject', [AdminVendorController::class, 'rejectService']);
             Route::put('/{vendorId}/documents/{docId}/review', [AdminVendorController::class, 'reviewDocument']);
-        });
-
-        // ==========================================
-        // VENDOR SELF-MANAGEMENT ROUTES (Task #2)
-        // ==========================================
-        Route::prefix('vendors')->group(function () {
-            // Vendor Profile Management
-            Route::get('/profile', [VendorController::class, 'getProfile']);
-            Route::post('/profile', [VendorController::class, 'createProfile']);
-            Route::put('/profile', [VendorController::class, 'updateProfile']);
-            Route::get('/dashboard', [VendorController::class, 'getDashboard']);
-
-            // Vendor Services
-            Route::get('/services', [VendorServiceController::class, 'index']);
-            Route::post('/services', [VendorServiceController::class, 'store']);
-            Route::put('/services/{id}', [VendorServiceController::class, 'update']);
-            Route::delete('/services/{id}', [VendorServiceController::class, 'destroy']);
-            Route::put('/services/{id}/review', [VendorServiceController::class, 'adminReview']);
-
-            // Vendor Documents
-            Route::get('/documents', [VendorDocumentController::class, 'index']);
-            Route::post('/documents', [VendorDocumentController::class, 'store']);
-            Route::put('/documents/{id}', [VendorDocumentController::class, 'update']);
-            Route::delete('/documents/{id}', [VendorDocumentController::class, 'destroy']);
-            Route::get('/documents/{id}/view', [VendorDocumentController::class, 'serveFile']);
         });
     });
 });

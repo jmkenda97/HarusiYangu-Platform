@@ -104,7 +104,7 @@ function App() {
               } />
 
               {/* --- HOST: VENDOR CATALOG --- */}
-              <Route path="/vendor-catalog" element={
+              <Route path="/vendors" element={
                 <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Catalog...</div>}>
                   <VendorCatalogPage />
                 </Suspense>

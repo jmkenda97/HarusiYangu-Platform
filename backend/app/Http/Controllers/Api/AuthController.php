@@ -28,10 +28,7 @@ class AuthController extends Controller
         // Check if user is soft-deleted
         $user = User::withTrashed()->where('phone', $phone)->first();
         if ($user && $user->trashed()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Your account has been deactivated. Please contact administration for assistance.'
-            ], 403);
+            return $this->errorResponse('Your account has been deactivated. Please contact administration for assistance.', [], 403);
         }
 
         $otp = rand(100000, 999999);
@@ -47,10 +44,10 @@ class AuthController extends Controller
         );
 
         // In a real app, send via SMS gateway. For now, returning it for testing.
-        return response()->json([
-            'success' => true,
-            'message' => 'OTP sent successfully',
-            'data' => ['debug_otp' => $otp] // REMOVE IN PRODUCTION
+        return $this->successResponse('OTP sent successfully', [
+            'phone' => $phone,
+            'expires_in_seconds' => 600,
+            'debug_otp' => $otp // REMOVE IN PRODUCTION
         ]);
     }
 
@@ -73,7 +70,7 @@ class AuthController extends Controller
             ->first();
 
         if (!$verification) {
-            return response()->json(['success' => false, 'message' => 'Invalid or expired OTP'], 422);
+            return $this->errorResponse('Invalid or expired OTP', [], 422);
         }
 
         $verification->update(['is_used' => true]);
@@ -82,22 +79,20 @@ class AuthController extends Controller
         if ($request->purpose === 'LOGIN') {
             $user = User::where('phone', $phone)->first();
             if (!$user) {
-                return response()->json(['success' => false, 'message' => 'User not found. Please register.'], 404);
+                return $this->errorResponse('User not found. Please register.', [], 404);
             }
 
             $token = $user->createToken('auth_token')->plainTextToken;
-            return response()->json([
-                'success' => true,
-                'message' => 'OTP verified successfully.',
-                'data' => [
-                    'user' => new UserResource($user),
-                    'token' => $token,
-                    'token_type' => 'Bearer'
-                ]
+            return $this->successResponse('Login successful', [
+                'user' => new UserResource($user),
+                'access_token' => $token,
+                'refresh_token' => 'jwt_refresh_token_placeholder', // TODO: Implement real refresh token
+                'expires_in' => 3600,
+                'token_type' => 'Bearer'
             ]);
         }
 
-        return response()->json(['success' => true, 'message' => 'Phone verified successfully']);
+        return $this->successResponse('Phone verified successfully');
     }
 
     public function requestRegistrationOtp(Request $request)
@@ -111,15 +106,12 @@ class AuthController extends Controller
         // Check if user is soft-deleted
         $user = User::withTrashed()->where('phone', $phone)->first();
         if ($user && $user->trashed()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Your account has been deactivated. Please contact administration for assistance.'
-            ], 403);
+            return $this->errorResponse('Your account has been deactivated. Please contact administration for assistance.', [], 403);
         }
 
         // Check if user already exists
         if ($user) {
-            return response()->json(['success' => false, 'message' => 'User already exists. Please login.'], 422);
+            return $this->errorResponse('User already exists. Please login.', [], 422);
         }
 
         $otp = rand(100000, 999999);
@@ -133,10 +125,10 @@ class AuthController extends Controller
             ]
         );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'OTP sent successfully',
-            'data' => ['debug_otp' => $otp] // REMOVE IN PRODUCTION
+        return $this->successResponse('OTP sent successfully', [
+            'phone' => $phone,
+            'expires_in_seconds' => 600,
+            'debug_otp' => $otp // REMOVE IN PRODUCTION
         ]);
     }
 
@@ -158,16 +150,12 @@ class AuthController extends Controller
             ->first();
 
         if (!$verification) {
-            return response()->json(['success' => false, 'message' => 'Invalid or expired OTP'], 422);
+            return $this->errorResponse('Invalid or expired OTP', [], 422);
         }
 
         $verification->update(['is_used' => true]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Phone verified successfully',
-            'data' => ['phone' => $phone],
-        ]);
+        return $this->successResponse('Phone verified successfully', ['phone' => $phone]);
     }
 
     public function completeRegistration(Request $request)
@@ -189,7 +177,7 @@ class AuthController extends Controller
         $phone = $this->normalizePhone($request->phone);
 
         if (User::where('phone', $phone)->exists()) {
-            return response()->json(['success' => false, 'message' => 'User already exists. Please login.'], 422);
+            return $this->errorResponse('User already exists. Please login.', [], 422);
         }
 
         // Ensure phone was verified
@@ -199,7 +187,7 @@ class AuthController extends Controller
             ->first();
 
         if (!$verification) {
-            return response()->json(['success' => false, 'message' => 'Phone not verified'], 403);
+            return $this->errorResponse('Phone not verified', [], 403);
         }
 
         try {
@@ -295,30 +283,24 @@ class AuthController extends Controller
                 $token = $user->createToken('auth_token')->plainTextToken;
                 $verification->delete();
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Registration complete!',
-                    'data' => [
-                        'user' => new UserResource($user),
-                        'token' => $token,
-                        'token_type' => 'Bearer'
-                    ]
+                return $this->successResponse('Registration complete!', [
+                    'user' => new UserResource($user),
+                    'access_token' => $token,
+                    'refresh_token' => 'jwt_refresh_token_placeholder',
+                    'expires_in' => 3600,
+                    'token_type' => 'Bearer'
                 ]);
             });
         } catch (\Exception $e) {
             \Log::error('Registration Error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Registration failed. Please try again later.',
-                'error' => $e->getMessage()
-            ], 500);
+            return $this->errorResponse('Registration failed. Please try again later.', ['error' => $e->getMessage()], 500);
         }
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-        return response()->json(['success' => true, 'message' => 'Logged out successfully.']);
+        return $this->successResponse('Logged out successfully');
     }
 
     /**
@@ -329,9 +311,8 @@ class AuthController extends Controller
         $notifications = auth()->user()->notifications()->latest()->limit(20)->get();
         $unreadCount = auth()->user()->unreadNotifications()->count();
 
-        return response()->json([
-            'success' => true,
-            'data' => $notifications,
+        return $this->successResponse('Notifications fetched successfully', [
+            'notifications' => $notifications,
             'unread_count' => $unreadCount
         ]);
     }
@@ -344,7 +325,7 @@ class AuthController extends Controller
         $notification = auth()->user()->notifications()->findOrFail($id);
         $notification->markAsRead();
 
-        return response()->json(['success' => true]);
+        return $this->successResponse('Notification marked as read');
     }
 
     /**
@@ -353,7 +334,7 @@ class AuthController extends Controller
     public function markAllNotificationsAsRead()
     {
         auth()->user()->unreadNotifications->markAsRead();
-        return response()->json(['success' => true]);
+        return $this->successResponse('All notifications marked as read');
     }
 
     private function createVendorDocument($vendorId, $type, $path, $file, $serviceId = null)

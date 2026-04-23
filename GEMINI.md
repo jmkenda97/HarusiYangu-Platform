@@ -2,6 +2,19 @@
 
 This file contains foundational mandates for Gemini CLI interaction within the `HarusiYangu-system` project. These instructions take absolute precedence over general defaults.
 
+## API 1.0 Strict Specification Mandates
+**CRITICAL:** Every API endpoint must strictly adhere to the HarusiYangu Platform API Specification v1.0. 
+
+### 1. Response Structure
+- **Success:** Must always return `{"success": true, "message": "...", "data": {...}, "meta": {...}}`.
+- **Error:** Must always return `{"success": false, "message": "...", "errors": {...}}`.
+- **Pagination:** List endpoints MUST use `->paginate()` and include a `meta` object with: `page`, `per_page`, `total`, `total_pages`.
+
+### 2. Implementation Rules
+- **Zero-Breakage Transformation:** Never rename database columns to match the API spec. Instead, use **Laravel API Resources** (`php artisan make:resource`) to map database snake_case to the exact specification field names.
+- **Strict Validation:** Use **Form Requests** (`php artisan make:request`) for all validation. Error responses must strictly follow the specified format.
+- **Routing:** All routes must be prefixed with `/api/v1` and follow the exact path naming in the documentation (e.g., `/committee-members` NOT `/committee`).
+
 ## Project Structure
 - **Backend:** Laravel (PHP 8.2+) located in the `/backend` directory.
 - **Frontend:** React (Vite, TypeScript/JS) located in the `/frontend` directory.

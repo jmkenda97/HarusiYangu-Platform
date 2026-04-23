@@ -524,7 +524,7 @@ const VendorCatalogPage = () => {
     const fetchVendors = async () => {
         try {
             setLoading(true);
-            const res = await api.get('/vendor-catalog');
+            const res = await api.get('/vendors');
             setVendors(res.data.data || []);
         } catch (err) {
             console.error('Failed to fetch vendors:', err);
@@ -545,7 +545,7 @@ const VendorCatalogPage = () => {
     const openVendorProfile = async (vendor) => {
         setLoadingVendorProfile(true);
         try {
-            const res = await api.get(`/vendor-catalog/${vendor.id}`);
+            const res = await api.get(`/vendors/${vendor.id}`);
             setSelectedVendor(res.data.data);
         } catch (err) {
             console.error('Failed to fetch vendor profile:', err);

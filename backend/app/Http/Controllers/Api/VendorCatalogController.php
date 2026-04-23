@@ -74,12 +74,9 @@ class VendorCatalogController extends Controller
         // Order by rating DESC, then business_name ASC
         $vendors = $query->orderBy('rating', 'desc')
             ->orderBy('business_name', 'asc')
-            ->get();
+            ->paginate($request->get('per_page', 20));
 
-        return response()->json([
-            'success' => true,
-            'data' => $vendors
-        ]);
+        return $this->paginatedResponse($vendors, \App\Http\Resources\VendorResource::class, 'Vendors fetched successfully');
     }
 
     /**
@@ -97,27 +94,10 @@ class VendorCatalogController extends Controller
                   }]); // ONLY verified & available services
             },
             'documents' => function ($q) {
-                $q->where('verification_status', 'APPROVED')
-                    ->whereNull('service_id');
+                $q->where('verification_status', 'APPROVED');
             }
-        ])
-            ->where('status', 'ACTIVE')
-            ->whereHas('services', function ($q) {
-                $q->where('is_available', true)
-                    ->where('is_verified', true);
-            })
-            ->find($id);
+        ])->where('status', 'ACTIVE')->findOrFail($id);
 
-        if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vendor not found or not available'
-            ], 404);
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => $vendor
-        ]);
+        return $this->successResponse('Vendor fetched successfully', $vendor);
     }
 }

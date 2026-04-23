@@ -24,18 +24,15 @@ class WalletLedgerController extends Controller
                 ->first();
 
             if (!$membership || !in_array($membership->committee_role, ['CHAIRPERSON', 'TREASURER'])) {
-                return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+                return $this->errorResponse('Unauthorized.', [], 403);
             }
         }
 
         $ledger = WalletLedgerEntry::where('event_id', $eventId)
             ->with('creator')
             ->orderBy('entry_date', 'desc')
-            ->paginate(10);
+            ->paginate($request->get('per_page', 10));
 
-        return response()->json([
-            'success' => true,
-            'data' => $ledger
-        ]);
+        return $this->paginatedResponse($ledger, \App\Http\Resources\WalletLedgerResource::class, 'Ledger fetched successfully');
     }
 }

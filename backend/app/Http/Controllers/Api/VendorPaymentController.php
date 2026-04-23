@@ -45,17 +45,14 @@ class VendorPaymentController extends Controller
 
         $suggestedAmount = ($booking->agreed_amount * $suggestedPercentage) / 100;
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'booking' => $booking,
-                'payments' => $payments,
-                'event_wallet_balance' => $booking->event->wallet->current_balance ?? 0,
-                'next_suggested' => [
-                    'milestone' => $nextMilestone,
-                    'percentage' => $suggestedPercentage,
-                    'amount' => $suggestedAmount
-                ]
+        return $this->successResponse('Payment info fetched successfully', [
+            'booking' => new \App\Http\Resources\EventVendorResource($booking),
+            'payments' => \App\Http\Resources\VendorPaymentResource::collection($payments),
+            'event_wallet_balance' => (float)($booking->event->wallet->current_balance ?? 0),
+            'next_suggested' => [
+                'milestone' => $nextMilestone,
+                'percentage' => $suggestedPercentage,
+                'amount' => $suggestedAmount
             ]
         ]);
     }
@@ -78,13 +75,13 @@ class VendorPaymentController extends Controller
         
         // Security check
         if ($booking->event->owner_user_id !== auth()->id()) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+            return $this->errorResponse('Unauthorized.', [], 403);
         }
 
         // Wallet check
         $wallet = $booking->event->wallet;
         if (!$wallet || $wallet->current_balance < $request->amount) {
-            return response()->json(['success' => false, 'message' => 'Insufficient funds in Event Wallet.'], 422);
+            return $this->errorResponse('Insufficient funds in Event Wallet.', [], 422);
         }
 
         DB::beginTransaction();
@@ -172,10 +169,10 @@ class VendorPaymentController extends Controller
             );
 
             DB::commit();
-            return response()->json(['success' => true, 'message' => 'Payment recorded successfully.', 'data' => $payment]);
+            return $this->successResponse('Payment recorded successfully.', new \App\Http\Resources\VendorPaymentResource($payment));
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Payment failed: ' . $e->getMessage()], 500);
+            return $this->errorResponse('Payment failed: ' . $e->getMessage(), [], 500);
         }
     }
 }

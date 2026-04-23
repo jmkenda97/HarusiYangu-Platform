@@ -82,17 +82,11 @@ class EventPaymentController extends Controller
                 ]);
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Payment recorded successfully. Balances updated.'
-            ], 201);
+            return $this->successResponse('Payment recorded successfully. Balances updated.', [], [], 201);
         } catch (\Exception $e) {
             \Log::error('Payment Error: ' . $e->getMessage());
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to record payment: ' . $e->getMessage()
-            ], 500);
+            return $this->errorResponse('Failed to record payment: ' . $e->getMessage(), [], 500);
         }
     }
 }

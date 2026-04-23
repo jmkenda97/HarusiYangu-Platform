@@ -12,7 +12,7 @@ const menuItems = [
     { name: 'Users', icon: Users, path: '/users' },
     { name: 'Vendors', icon: Store, path: '/admin/vendors' },
     // --- HOST: Vendor Catalog ---
-    { name: 'Vendor Catalog', icon: Store, path: '/vendor-catalog' },
+    { name: 'Vendor Catalog', icon: Store, path: '/vendors' },
 ];
 
 // Vendor-specific menu items

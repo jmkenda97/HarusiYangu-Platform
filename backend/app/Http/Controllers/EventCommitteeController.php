@@ -53,15 +53,12 @@ class EventCommitteeController extends Controller
 
     public function index($eventId)
     {
-        // Anyone who can access the event page can likely see the committee list.
-        // If you want to restrict this, add: $this->authorize('viewCommittee', $event);
-
         $event = Event::findOrFail($eventId);
         $members = EventCommitteeMember::where('event_id', $eventId)
             ->with('user:id,first_name,last_name,phone,email,profile_photo_url')
             ->get();
 
-        return response()->json(['data' => $members]);
+        return $this->successResponse('Committee members fetched successfully', $members);
     }
 
     public function store(Request $request, $eventId)
@@ -77,7 +74,7 @@ class EventCommitteeController extends Controller
         // 2. Fetch Event for Authorization
         $event = Event::findOrFail($eventId);
 
-        // 3. CHECK PERMISSIONS (Only Owner or 'manage-event-committee' permission)
+        // 3. CHECK PERMISSIONS
         $this->authorize('manageCommittee', $event);
 
         return DB::transaction(function () use ($request, $eventId) {
@@ -95,22 +92,22 @@ class EventCommitteeController extends Controller
                 ]
             );
 
-            // 5. Assign Base Spatie Role (For high-level authorization)
+            // 5. Assign Base Spatie Role
             if (!$user->hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'HOST'])) {
                 $spatieRole = ($request->committee_role === 'GATE_OFFICER') ? 'GATE_OFFICER' : 'COMMITTEE_MEMBER';
                 $user->assignRole($spatieRole);
             }
 
-            // 6. Check for duplicates (User already in this event's committee)
+            // 6. Check for duplicates
             $existing = EventCommitteeMember::where('event_id', $eventId)
                 ->where('user_id', $user->id)
                 ->first();
 
             if ($existing) {
-                return response()->json(['message' => 'User is already a committee member.'], 409);
+                return $this->errorResponse('User is already a committee member.', [], 409);
             }
 
-            // 7. Define Role Flags (Zero-Leakage Model)
+            // 7. Define Role Flags
             $role = $request->committee_role;
             $flags = [
                 'can_manage_budget' => in_array($role, ['CHAIRPERSON', 'TREASURER']),
@@ -122,13 +119,14 @@ class EventCommitteeController extends Controller
 
             // 8. CREATE MEMBER RECORD
             $member = EventCommitteeMember::create(array_merge([
+                'id' => (string) Str::uuid(),
                 'event_id' => $eventId,
                 'user_id' => $user->id,
                 'committee_role' => $role,
                 'added_by' => auth()->id(),
             ], $flags));
 
-            return response()->json(['data' => $member], 201);
+            return $this->successResponse('Committee member added successfully', $member, [], 201);
         });
     }
 
@@ -168,7 +166,7 @@ class EventCommitteeController extends Controller
             'can_scan_cards' => in_array($role, ['CHAIRPERSON', 'GATE_OFFICER']),
         ]);
 
-        return response()->json(['data' => $member]);
+        return $this->successResponse('Committee member updated successfully', $member);
     }
 
     public function destroy($eventId, $id)
@@ -177,11 +175,18 @@ class EventCommitteeController extends Controller
             ->where('id', $id)
             ->firstOrFail();
 
+        $event = $member->event;
+
         // CHECK PERMISSIONS
-        $this->authorize('manageCommittee', $member->event);
+        $this->authorize('manageCommittee', $event);
+
+        if ($member->user_id === $event->owner_user_id) {
+            return $this->errorResponse('Cannot remove the event owner from the committee.', [], 422);
+        }
 
         $member->delete();
-        return response()->json(null, 204);
+
+        return $this->successResponse('Committee member removed successfully');
     }
 
     public function export($eventId)

@@ -79,17 +79,13 @@ class EventContributorController extends Controller
                     'contribution_status' => 'PLEDGED',
                     'assigned_by' => $user->id,
                 ]);
+
+                return $contactId;
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Pledge added successfully'
-            ], 201);
+            return $this->successResponse('Pledge added successfully', [], [], 201);
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 400);
+            return $this->errorResponse($e->getMessage(), [], 400);
         }
     }
 

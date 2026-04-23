@@ -26,15 +26,17 @@ class EventContactController extends Controller
         // --- CHANGE: Use Policy Check ---
         $this->authorize('manageGuests', $event);
 
-        // Load contacts. Load 'pledge' relation so we know if they are contributors
+        // Load contacts with pagination
         $contacts = EventContact::where('event_id', $eventId)
             ->with('pledge:id,contact_id,contribution_status,pledge_amount')
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->paginate($request->get('per_page', 20));
 
-        return response()->json([
-            'success' => true,
-            'data' => $contacts
+        return $this->successResponse('Contacts fetched successfully', $contacts->items(), [
+            'page' => $contacts->currentPage(),
+            'per_page' => $contacts->perPage(),
+            'total' => $contacts->total(),
+            'total_pages' => $contacts->lastPage(),
         ]);
     }
 
@@ -59,8 +61,8 @@ class EventContactController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($request, $event, $user) {
-                EventContact::create([
+            $contact = DB::transaction(function () use ($request, $event, $user) {
+                return EventContact::create([
                     'id' => Str::uuid(),
                     'event_id' => $event->id,
                     'full_name' => $request->full_name,
@@ -74,22 +76,13 @@ class EventContactController extends Controller
                 ]);
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Guest added successfully'
-            ], 201);
+            return $this->successResponse('Contact added successfully', $contact, [], 201);
         } catch (\Exception $e) {
             if (strpos($e->getMessage(), 'unique constraint') !== false) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This phone number is already on the guest list for this event.'
-                ], 400);
+                return $this->errorResponse('This phone number is already on the guest list for this event.', [], 400);
             }
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to add guest: ' . $e->getMessage()
-            ], 500);
+            return $this->errorResponse('Failed to add contact: ' . $e->getMessage(), [], 500);
         }
     }
 
@@ -114,11 +107,7 @@ class EventContactController extends Controller
 
         $contact->update($request->only(['full_name', 'phone', 'email', 'relationship_label', 'is_vip', 'is_invited']));
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Guest updated',
-            'data' => $contact
-        ]);
+        return $this->successResponse('Contact updated successfully', $contact);
     }
 
     /**
@@ -132,18 +121,12 @@ class EventContactController extends Controller
         $this->authorize('manageGuests', $contact->event);
 
         if ($contact->pledge) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete this guest. They have an active pledge. Remove the pledge first.'
-            ], 400);
+            return $this->errorResponse('Cannot delete this contact. They have an active pledge. Remove the pledge first.', [], 400);
         }
 
         $contact->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Guest removed'
-        ]);
+        return $this->successResponse('Contact removed successfully');
     }
 
     /**

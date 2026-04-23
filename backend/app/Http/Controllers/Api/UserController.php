@@ -22,62 +22,52 @@ class UserController extends Controller
         }
         // LOGIC: Host sees their own event users (Placeholder for Phase 2)
         elseif ($currentUser->hasRole('HOST')) {
-            // For now, just return the host themselves since no events exist yet.
-            // In Phase 2, this will be: $query->whereHas('events', ...);
             $query->where('id', $currentUser->id);
         }
 
-        $users = $query->orderBy('created_at', 'desc')->get();
+        // Apply filters from spec
+        if ($request->has('role')) {
+            $query->where('role', $request->role);
+        }
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
 
-        return response()->json([
-            'success' => true,
-            'data' => UserResource::collection($users)
-        ]);
+        $users = $query->orderBy('created_at', 'desc')->paginate($request->get('per_page', 20));
+
+        return $this->paginatedResponse($users, UserResource::class, 'Users fetched successfully');
     }
 
     public function me(Request $request)
     {
-        return response()->json([
-            'success' => true,
-            'data' => new UserResource($request->user())
-        ]);
+        return $this->successResponse('Profile fetched successfully', new UserResource($request->user()));
     }
 
     public function updateProfile(Request $request)
     {
         // 1. GET THE REAL LOGGED-IN USER
-        // We remove the hardcoded ID. We use the user that is currently logged in.
         $user = $request->user();
 
-        // 2. DEFINE VALIDATION RULES
+        // 2. DEFINE VALIDATION RULES (Aligned with Doc 3.1)
         $rules = [
             'first_name' => 'sometimes|string|max:100',
+            'middle_name' => 'sometimes|nullable|string|max:100',
             'last_name' => 'sometimes|string|max:100',
-            'profile_photo_url' => 'sometimes|string',
+            'profile_photo_url' => 'sometimes|nullable|string',
         ];
 
-        // 3. SMART EMAIL VALIDATION
-        // Only validate the email if it is actually sent in the request.
-        // CRITICAL: We add 'ignore' => $user->id so Laravel knows 
-        // "If this email belongs to the CURRENT user, it is OK."
         if ($request->has('email')) {
             $rules['email'] = 'required|email|unique:users,email,' . $user->id;
         }
 
         // 4. VALIDATE DATA
-        // This returns only the valid data.
         $data = $request->validate($rules);
 
         // 5. UPDATE THE USER
-        // We use Eloquent update() which is safer than DB::table
         $user->update($data);
 
         // 6. RETURN SUCCESS
-        return response()->json([
-            'success' => true,
-            'message' => 'Profile updated successfully',
-            'data' => new UserResource($user)
-        ]);
+        return $this->successResponse('Profile updated successfully', new UserResource($user));
     }
 
     public function store(Request $request)
@@ -92,24 +82,20 @@ class UserController extends Controller
         ]);
 
         $user = User::create([
-            'id' => (string) Str::uuid(), // <--- Now this works because we imported Str
+            'id' => (string) Str::uuid(),
             'first_name' => $request->first_name,
             'middle_name' => $request->middle_name,
             'last_name' => $request->last_name,
             'phone' => $request->phone,
             'email' => $request->email,
-            'role' => 'HOST', // Default fallback
+            'role' => $request->role,
             'status' => 'ACTIVE',
             'is_phone_verified' => false,
         ]);
 
         $user->assignRole($request->role);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'User created successfully',
-            'data' => new UserResource($user)
-        ]);
+        return $this->successResponse('User created successfully', new UserResource($user), [], 201);
     }
 
     public function update(Request $request, $id)
@@ -122,7 +108,6 @@ class UserController extends Controller
             'last_name' => 'sometimes|string|max:100',
             'email' => 'sometimes|email|unique:users,email,' . $user->id,
             'phone' => 'sometimes|string|unique:users,phone,' . $user->id,
-            // Super Admin logic implies mostly 'HOST', but let's keep validation flexible for now
             'role' => 'sometimes|string|in:SUPER_ADMIN,ADMIN,HOST,COMMITTEE_MEMBER,GATE_OFFICER,VENDOR,CONTRIBUTOR',
         ]);
 
@@ -131,7 +116,6 @@ class UserController extends Controller
             'first_name',
             'middle_name',
             'last_name',
-            'middle_name',
             'email',
             'status',
             'phone'
@@ -139,34 +123,24 @@ class UserController extends Controller
 
         // UPDATE ROLE LOGIC
         if ($request->has('role')) {
-            // 1. Update Spatie (Permissions System)
             $user->syncRoles([$request->role]);
-
-            // 2. Update the users table column (So pgAdmin shows the change)
             $user->role = $request->role;
             $user->save();
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'User updated successfully',
-            'data' => new UserResource($user)
-        ]);
+        return $this->successResponse('User updated successfully', new UserResource($user));
     }
 
     // <--- 2. ADDED Request $request HERE
     public function destroy(Request $request, $id)
     {
         if ($request->user()->id === $id) {
-            return response()->json(['success' => false, 'message' => 'You cannot delete your own account.'], 403);
+            return $this->errorResponse('You cannot delete your own account.', [], 403);
         }
 
         $user = User::findOrFail($id);
         $user->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'User deleted successfully'
-        ]);
+        return $this->successResponse('User deleted successfully');
     }
 }

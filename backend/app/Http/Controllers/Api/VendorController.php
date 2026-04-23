@@ -25,16 +25,10 @@ class VendorController extends Controller
             ->first();
 
         if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No vendor profile found. Please create your vendor profile first.'
-            ], 404);
+            return $this->errorResponse('No vendor profile found. Please create your vendor profile first.', [], 404);
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => $vendor
-        ]);
+        return $this->successResponse('Vendor profile fetched successfully', new \App\Http\Resources\VendorResource($vendor));
     }
 
     /**
@@ -44,21 +38,13 @@ class VendorController extends Controller
     {
         $user = $request->user();
 
-        // Only VENDOR role users can create a vendor profile
         if ($user->role !== 'VENDOR') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only vendor accounts can create a vendor profile.'
-            ], 403);
+            return $this->errorResponse('Only vendor accounts can create a vendor profile.', [], 403);
         }
 
-        // Check if user already has a vendor profile
         $existingVendor = Vendor::where('user_id', $user->id)->first();
         if ($existingVendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You already have a vendor profile.'
-            ], 400);
+            return $this->errorResponse('You already have a vendor profile.', [], 400);
         }
 
         try {
@@ -76,17 +62,10 @@ class VendorController extends Controller
                 ]);
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Vendor profile created successfully',
-                'data' => $vendor
-            ], 201);
+            return $this->successResponse('Vendor profile created successfully', new \App\Http\Resources\VendorResource($vendor), [], 201);
         } catch (\Exception $e) {
             Log::error('Vendor Profile Creation Failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create vendor profile: ' . $e->getMessage()
-            ], 500);
+            return $this->errorResponse('Failed to create vendor profile: ' . $e->getMessage(), [], 500);
         }
     }
 
@@ -98,13 +77,9 @@ class VendorController extends Controller
         $vendor = Vendor::where('user_id', $request->user()->id)->first();
 
         if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No vendor profile found.'
-            ], 404);
+            return $this->errorResponse('No vendor profile found.', [], 404);
         }
 
-        // Authorize via policy
         $this->authorize('manageProfile', $vendor);
 
         try {
@@ -115,20 +90,12 @@ class VendorController extends Controller
                 'email' => $request->email,
                 'address' => $request->address,
                 'service_type' => $request->service_type,
-                // Status is NOT updated here - admin controls that
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Vendor profile updated successfully',
-                'data' => $vendor
-            ]);
+            return $this->successResponse('Vendor profile updated successfully', new \App\Http\Resources\VendorResource($vendor));
         } catch (\Exception $e) {
             Log::error('Vendor Profile Update Failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update vendor profile: ' . $e->getMessage()
-            ], 500);
+            return $this->errorResponse('Failed to update vendor profile: ' . $e->getMessage(), [], 500);
         }
     }
 
@@ -143,17 +110,13 @@ class VendorController extends Controller
             ->first();
 
         if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No vendor profile found. Please complete your vendor profile first.'
-            ], 404);
+            return $this->errorResponse('No vendor profile found. Please complete your vendor profile first.', [], 404);
         }
 
         $assignedEvents = EventVendor::with(['event', 'event.owner'])
             ->where('vendor_id', $vendor->id)
             ->get();
 
-        // Get confirmed event dates to check for conflicts
         $confirmedDates = $assignedEvents->where('status', 'ACCEPTED')
             ->pluck('event.event_date')
             ->filter()
@@ -186,7 +149,7 @@ class VendorController extends Controller
                 'event_id' => $ev->event_id,
                 'event_name' => $ev->event?->event_name,
                 'event_date' => $ev->event?->event_date,
-                'has_conflict' => $hasConflict, // Conflict check for "Perfect and Standard" vendor view
+                'has_conflict' => $hasConflict,
                 'host_name' => $ev->event?->owner?->first_name . ' ' . $ev->event?->owner?->last_name,
                 'host_phone' => $ev->event?->owner?->phone,
                 'assigned_service' => $ev->assigned_service,
@@ -197,41 +160,25 @@ class VendorController extends Controller
             ];
         })->values();
 
-        // Get Wallet Data
         $wallet = \App\Models\VendorWallet::where('vendor_id', $vendor->id)->first();
 
-        // Get Recent Payments (Earnings History)
         $payments = \App\Models\VendorPayment::with(['event'])
             ->where('vendor_id', $vendor->id)
             ->orderBy('payment_date', 'desc')
             ->limit(10)
             ->get();
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'profile' => [
-                    'id' => $vendor->id,
-                    'business_name' => $vendor->business_name,
-                    'full_name' => $vendor->full_name,
-                    'phone' => $vendor->phone,
-                    'email' => $vendor->email,
-                    'service_type' => $vendor->service_type,
-                    'status' => $vendor->status,
-                    'verification_status' => $vendor->status,
-                    'rating' => $vendor->rating,
-                    'notes' => $vendor->notes,
-                ],
-                'services' => $vendor->services,
-                'documents' => $vendor->documents,
-                'events' => $confirmedEvents,
-                'inquiries' => $inquiries,
-                'payments' => $payments, // For the professional earnings statement
-                'wallet' => [
-                    'available_balance' => $wallet ? $wallet->available_balance : 0,
-                    'pending_balance' => $wallet ? $wallet->pending_balance : 0,
-                    'total_earnings' => $wallet ? $wallet->total_earnings : 0,
-                ],
+        return $this->successResponse('Vendor dashboard fetched successfully', [
+            'profile' => new \App\Http\Resources\VendorResource($vendor),
+            'services' => $vendor->services,
+            'documents' => $vendor->documents,
+            'events' => $confirmedEvents,
+            'inquiries' => $inquiries,
+            'payments' => $payments,
+            'wallet' => [
+                'available_balance' => $wallet ? $wallet->available_balance : 0,
+                'pending_balance' => $wallet ? $wallet->pending_balance : 0,
+                'total_earnings' => $wallet ? $wallet->total_earnings : 0,
             ],
         ]);
     }
