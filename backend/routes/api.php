@@ -60,7 +60,9 @@ Route::prefix('v1')->group(function () {
         Route::put('/bookings/{bookingId}/accept', [\App\Http\Controllers\Api\EventBookingController::class, 'acceptQuote']);
         Route::put('/bookings/{bookingId}/confirm-service', [\App\Http\Controllers\Api\EventBookingController::class, 'confirmServiceReceived']);
 
-        // Financials & Milestone Payments (Task #5)
+        // Financials & Transaction History
+        Route::get('/events/{eventId}/ledger', [WalletLedgerController::class, 'index']);
+        Route::get('/vendor/ledger', [WalletLedgerController::class, 'vendorIndex']);
         Route::get('/bookings/{bookingId}/payments', [\App\Http\Controllers\Api\VendorPaymentController::class, 'getPaymentInfo']);
         Route::post('/bookings/{bookingId}/payments', [\App\Http\Controllers\Api\VendorPaymentController::class, 'store']);
         Route::put('/payments/{paymentId}/confirm', [\App\Http\Controllers\Api\VendorPaymentController::class, 'confirmReceipt']);
@@ -84,7 +86,7 @@ Route::prefix('v1')->group(function () {
         // URL Pattern: /api/v1/events/{event_id}/...
         Route::prefix('events/{eventId}')->group(function () {
             Route::get('/ledger', [WalletLedgerController::class, 'index']);
-            
+
             // --- COMMITTEE ROUTES ---
             Route::get('/committee-members', [EventCommitteeController::class, 'index']);
             Route::post('/committee-members', [EventCommitteeController::class, 'store']);

@@ -202,7 +202,7 @@ const VendorDashboardPage = () => {
                     icon={Wallet} 
                     color="emerald" 
                     subtext="Ready for withdrawal"
-                    onClick={() => navigate('/vendor/bookings?tab=earnings')}
+                    onClick={() => navigate('/vendor/bookings?tab=transactions')}
                 />
                 <StatCard 
                     label="Escrow Balance" 
@@ -210,7 +210,7 @@ const VendorDashboardPage = () => {
                     icon={Shield} 
                     color="amber" 
                     subtext="Held until completion"
-                    onClick={() => navigate('/vendor/bookings?tab=earnings')}
+                    onClick={() => navigate('/vendor/bookings?tab=transactions')}
                 />
                 <StatCard 
                     label="Pending Inquiries" 

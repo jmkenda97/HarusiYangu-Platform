@@ -37,6 +37,9 @@ const EventDetailsPage = () => {
     const [ledger, setLedger] = useState([]);
     const [ledgerPage, setLedgerPage] = useState(1);
     const [ledgerTotal, setLedgerTotal] = useState(0);
+    const [ledgerSearch, setLedgerSearch] = useState('');
+    const [ledgerMonth, setLedgerMonth] = useState('');
+    const [ledgerType, setLedgerType] = useState('');
 
     // --- SEARCH STATES ---
     const [guestSearch, setGuestSearch] = useState('');
@@ -76,6 +79,7 @@ const EventDetailsPage = () => {
         milestone: 'DEPOSIT',
         payment_method: 'BANK_TRANSFER',
         transaction_reference: '',
+        proof_attachment: null,
         notes: ''
     });
 
@@ -290,11 +294,35 @@ const EventDetailsPage = () => {
 
     const fetchLedger = async () => {
         try {
-            const res = await api.get(`/events/${id}/ledger?page=${ledgerPage}`);
+            const res = await api.get(`/events/${id}/ledger`, {
+                params: {
+                    page: ledgerPage,
+                    search: ledgerSearch,
+                    month: ledgerMonth,
+                    type: ledgerType
+                }
+            });
             setLedger(res.data.data);
             setLedgerTotal(res.data.meta.total);
         } catch (err) { console.error("Ledger fetch error", err); }
     };
+
+    // Re-fetch when filters change
+    useEffect(() => {
+        if (activeTab === 'finance') {
+            fetchLedger();
+        }
+    }, [ledgerPage, ledgerMonth, ledgerType]);
+
+    // Use a separate effect for search with debounce if needed, but for now simple:
+    useEffect(() => {
+        if (activeTab === 'finance') {
+            const delayDebounceFn = setTimeout(() => {
+                fetchLedger();
+            }, 500);
+            return () => clearTimeout(delayDebounceFn);
+        }
+    }, [ledgerSearch]);
 
     useEffect(() => {
         const loadData = async () => {
@@ -1077,24 +1105,64 @@ const EventDetailsPage = () => {
                     </div>
                 )}
 
-                {/* --- NEW: FINANCE TAB (WALLET & LEDGER) --- */}
+                {/* --- FINANCE TAB (WALLET & LEDGER) --- */}
                 {activeTab === 'finance' && (
                     <div className="space-y-6 animate-in fade-in duration-300">
-                        <div className="flex items-center justify-between px-2">
-                            <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-xs flex items-center gap-2">
-                                <FileText className="text-emerald-500" size={16} /> Wallet Statement
-                            </h3>
-                            <div className="flex items-center gap-4">
+                        {/* Summary Header */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
+                            <div>
+                                <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-xs flex items-center gap-2">
+                                    <FileText className="text-emerald-500" size={16} /> Transaction History
+                                </h3>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Digital Mirror of Manual Payments</p>
+                            </div>
+                            <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
                                 <div className="text-right">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Inflow</p>
-                                    <p className="text-xs font-black text-emerald-600 tracking-tight">{formatCurrency(event.wallet?.total_inflow || 0)}</p>
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Inflow</p>
+                                    <p className="text-sm font-black text-emerald-600 tracking-tight">{formatCurrency(event.wallet?.total_inflow || 0)}</p>
                                 </div>
-                                <div className="w-px h-6 bg-slate-200 dark:bg-slate-800"></div>
+                                <div className="w-px h-8 bg-slate-100 dark:bg-slate-800"></div>
                                 <div className="text-right">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Outflow</p>
-                                    <p className="text-xs font-black text-red-600 tracking-tight">{formatCurrency(event.wallet?.total_outflow || 0)}</p>
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Outflow</p>
+                                    <p className="text-sm font-black text-red-600 tracking-tight">{formatCurrency(event.wallet?.total_outflow || 0)}</p>
+                                </div>
+                                <div className="w-px h-8 bg-slate-100 dark:bg-slate-800"></div>
+                                <div className="text-right">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Current Balance</p>
+                                    <p className="text-sm font-black text-brand-600 tracking-tight">{formatCurrency(event.wallet?.current_balance || 0)}</p>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Search & Filter Bar BROO */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                            <div className="md:col-span-2 relative">
+                                <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search description or reference..." 
+                                    className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold"
+                                    value={ledgerSearch}
+                                    onChange={e => setLedgerSearch(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <input 
+                                    type="month" 
+                                    className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold"
+                                    value={ledgerMonth}
+                                    onChange={e => setLedgerMonth(e.target.value)}
+                                />
+                            </div>
+                            <select 
+                                className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold"
+                                value={ledgerType}
+                                onChange={e => setLedgerType(e.target.value)}
+                            >
+                                <option value="">All Types</option>
+                                <option value="CREDIT">Inflow (+)</option>
+                                <option value="DEBIT">Outflow (-)</option>
+                            </select>
                         </div>
 
                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -1106,31 +1174,27 @@ const EventDetailsPage = () => {
                                             <th className="px-6 py-4">Description</th>
                                             <th className="px-6 py-4">Type</th>
                                             <th className="px-6 py-4 text-right">Amount</th>
-                                            <th className="px-6 py-4 text-center">Verification</th>
+                                            <th className="px-6 py-4 text-center">Status</th>
+                                            <th className="px-6 py-4 text-right">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                         {isTabLoading ? (
-                                            <tr>
-                                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic font-medium">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <Loader2 className="animate-spin" size={16} />
-                                                        Loading the ledger...
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                            <tr><td colSpan="6" className="px-6 py-12 text-center text-slate-400 font-medium italic"><Loader2 className="animate-spin mx-auto mb-2" size={24} /> Loading History...</td></tr>
                                         ) : ledger.length === 0 ? (
-                                            <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic font-medium">No transactions recorded in the ledger yet.</td></tr>
+                                            <tr><td colSpan="6" className="px-6 py-12 text-center text-slate-400 font-medium italic">No transactions match your search.</td></tr>
                                         ) : (
                                             ledger.map((entry) => (
-                                                <tr key={entry.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <tr key={entry.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                                                     <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
-                                                        {new Date(entry.entry_date).toLocaleDateString()}
-                                                        <div className="text-[10px] opacity-60">{new Date(entry.entry_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                        <div className="font-bold text-slate-900 dark:text-white">{new Date(entry.entry_date).toLocaleDateString()}</div>
+                                                        <div className="text-[10px] opacity-60 uppercase font-black tracking-tighter">{(entry.source_type || 'TX').replace(/_/g, ' ')}</div>
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <div className="font-bold text-slate-900 dark:text-white leading-tight">{entry.description}</div>
-                                                        <div className="text-[10px] text-slate-400 uppercase font-medium tracking-tighter mt-0.5">{(entry.source_type || 'TX').replace(/_/g, ' ')}</div>
+                                                        {entry.payment_status?.reference && entry.payment_status.reference !== 'N/A' && (
+                                                            <div className="text-[10px] text-brand-600 dark:text-brand-400 font-mono mt-1">Ref: {entry.payment_status.reference}</div>
+                                                        )}
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${entry.entry_type === 'CREDIT' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -1141,9 +1205,22 @@ const EventDetailsPage = () => {
                                                         {entry.entry_type === 'CREDIT' ? '+' : '-'} {formatCurrency(entry.amount)}
                                                     </td>
                                                     <td className="px-6 py-4 text-center">
-                                                        <span className="inline-flex items-center gap-1 text-emerald-600 font-black text-[10px] uppercase">
-                                                            <CheckCircle size={10} /> Verified
-                                                        </span>
+                                                        {entry.source_type === 'VENDOR_PAYMENT' ? (
+                                                            <span className={`inline-flex items-center gap-1 font-black text-[9px] uppercase px-2 py-1 rounded-lg ${entry.payment_status?.is_confirmed ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                                                                {entry.payment_status?.is_confirmed ? <CheckCircle size={10} /> : <Clock size={10} />}
+                                                                {entry.payment_status?.is_confirmed ? 'Verified' : 'Awaiting Conf.'}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 text-emerald-600 font-black text-[9px] uppercase"><CheckCircle size={10} /> Verified</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {entry.payment_status?.proof_url && (
+                                                                <a href={entry.payment_status.proof_url} target="_blank" rel="noopener noreferrer" className="p-2 text-slate-400 hover:text-brand-600 transition-all"><Download size={16} /></a>
+                                                            )}
+                                                            <button onClick={() => openInvoice(entry)} className="p-2 text-slate-400 hover:text-brand-600 transition-all"><FileText size={16} /></button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))
@@ -1439,7 +1516,57 @@ const EventDetailsPage = () => {
                                     )}
                                 </label>
                                 <input required type="number" className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 rounded-2xl px-6 py-4 font-black text-slate-900 dark:text-white text-2xl outline-none focus:ring-4 focus:ring-brand-500/10 shadow-inner" value={vendorPaymentData.amount} onChange={e => setVendorPaymentData({ ...vendorPaymentData, amount: e.target.value })} />
-                            </div>                            <div className="pt-4"><button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 dark:bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-black/20 flex items-center justify-center gap-3">{isSubmitting ? 'Processing Disbursement...' : <><DollarSign size={20} /> Authorize Payment</>}</button></div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 ml-1">Payment Method</label>
+                                    <select 
+                                        className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 rounded-xl px-4 py-3 font-bold text-sm outline-none"
+                                        value={vendorPaymentData.payment_method}
+                                        onChange={e => setVendorPaymentData({ ...vendorPaymentData, payment_method: e.target.value })}
+                                    >
+                                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                                        <option value="MPESA">M-Pesa</option>
+                                        <option value="AIRTEL_MONEY">Airtel Money</option>
+                                        <option value="TIGO_PESA">Tigo Pesa</option>
+                                        <option value="CASH">Cash</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 ml-1">Transaction Ref #</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="e.g. SGF7829JK"
+                                        className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:border-brand-500"
+                                        value={vendorPaymentData.transaction_reference}
+                                        onChange={e => setVendorPaymentData({ ...vendorPaymentData, transaction_reference: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 ml-1">Proof of Payment (Screenshot)</label>
+                                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-200 dark:border-slate-800 border-dashed rounded-2xl cursor-pointer bg-slate-50/50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group">
+                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                        <Upload className="w-8 h-8 mb-3 text-slate-400 group-hover:text-brand-500 transition-colors" />
+                                        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                                            <span className="font-black">Click to upload</span> or drag and drop
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 uppercase tracking-tighter">
+                                            {vendorPaymentData.proof_attachment ? vendorPaymentData.proof_attachment.name : 'JPG, PNG or PDF (MAX. 5MB)'}
+                                        </p>
+                                    </div>
+                                    <input 
+                                        type="file" 
+                                        className="hidden" 
+                                        accept="image/*,.pdf"
+                                        onChange={e => setVendorPaymentData({ ...vendorPaymentData, proof_attachment: e.target.files[0] })}
+                                    />
+                                </label>
+                            </div>
+
+                            <div className="pt-4"><button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 dark:bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-black/20 flex items-center justify-center gap-3">{isSubmitting ? 'Processing Disbursement...' : <><DollarSign size={20} /> Authorize Payment</>}</button></div>
                         </form>
                     </div>
                 </div>

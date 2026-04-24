@@ -289,6 +289,33 @@ const VendorBookingsPage = () => {
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // --- TRANSACTION HISTORY BROO ---
+    const [transactions, setTransactions] = useState([]);
+    const [txPage, setTxPage] = useState(1);
+    const [txTotal, setTxTotal] = useState(0);
+    const [txMonth, setTxMonth] = useState('');
+    const [txService, setTxService] = useState('');
+
+    const fetchTransactions = async () => {
+        try {
+            const res = await api.get('/vendor/ledger', {
+                params: {
+                    page: txPage,
+                    month: txMonth,
+                    service_type: txService
+                }
+            });
+            setTransactions(res.data.data);
+            setTxTotal(res.data.meta.total);
+        } catch (err) { console.error("TX fetch error", err); }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'transactions') {
+            fetchTransactions();
+        }
+    }, [activeTab, txPage, txMonth, txService]);
+
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -437,18 +464,18 @@ const VendorBookingsPage = () => {
                 </div>
             </div>
 
-            {/* Tabs & Search */}
+            {/* Tabs & Search BROO */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit">
+                <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit overflow-x-auto scrollbar-hide">
                     {[
                         { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
                         { id: 'bookings', label: 'Active Bookings', icon: Calendar },
-                        { id: 'earnings', label: 'Earnings Ledger', icon: TrendingUp }
+                        { id: 'transactions', label: 'Transaction History', icon: TrendingUp }
                     ].map((tab) => (
                         <button
                             key={tab.id}
                             onClick={() => handleTabChange(tab.id)}
-                            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black transition-all ${
+                            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black transition-all flex-shrink-0 ${
                                 activeTab === tab.id
                                     ? 'bg-white dark:bg-slate-900 text-brand-600 shadow-sm'
                                     : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
@@ -459,15 +486,40 @@ const VendorBookingsPage = () => {
                         </button>
                     ))}
                 </div>
-                <div className="relative w-full md:w-80">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                        type="text"
-                        placeholder={`Search ${activeTab}...`}
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all shadow-sm"
-                    />
+
+                <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                    {activeTab === 'transactions' ? (
+                        <>
+                            <div className="relative w-full md:w-48">
+                                <input 
+                                    type="month" 
+                                    value={txMonth}
+                                    onChange={e => setTxMonth(e.target.value)}
+                                    className="w-full pl-4 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none transition-all shadow-sm"
+                                />
+                            </div>
+                            <div className="relative w-full md:w-48">
+                                <input 
+                                    type="text" 
+                                    placeholder="Filter Service..."
+                                    value={txService}
+                                    onChange={e => setTxService(e.target.value)}
+                                    className="w-full pl-4 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none transition-all shadow-sm"
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <div className="relative w-full md:w-80">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <input
+                                type="text"
+                                placeholder={`Search ${activeTab}...`}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all shadow-sm"
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -516,7 +568,54 @@ const VendorBookingsPage = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                                {paginatedData.map((item) => (
+                                {activeTab === 'transactions' ? (
+                                    transactions.map((item) => (
+                                        <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+                                            <td className="px-8 py-6">
+                                                <p className="text-xs font-black text-slate-900 dark:text-white">{new Date(item.entry_date).toLocaleDateString('en-GB')}</p>
+                                                <p className="text-[9px] text-slate-400 font-bold uppercase">{new Date(item.entry_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                            </td>
+                                            <td className="px-8 py-6">
+                                                <p className="font-black text-slate-900 dark:text-white leading-tight">{item.event?.name}</p>
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{item.description}</p>
+                                            </td>
+                                            <td className="px-8 py-6">
+                                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${item.entry_type === 'CREDIT' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                                                    {item.entry_type}
+                                                </span>
+                                            </td>
+                                            <td className="px-8 py-6 text-right">
+                                                <p className={`font-black text-lg ${item.entry_type === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                    {item.entry_type === 'CREDIT' ? '+' : '-'} {formatCurrency(item.amount)}
+                                                </p>
+                                            </td>
+                                            <td className="px-8 py-6 text-center">
+                                                <div className="flex flex-col items-center">
+                                                    <span className={`inline-flex items-center gap-1 font-black text-[9px] uppercase px-2.5 py-1 rounded-full ${item.payment_status?.is_confirmed ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                                                        {item.payment_status?.is_confirmed ? <CheckCircle size={10} /> : <Clock size={10} />}
+                                                        {item.payment_status?.is_confirmed ? 'Verified' : 'Confirm Rec.'}
+                                                    </span>
+                                                    {item.payment_status?.confirmed_at && (
+                                                        <p className="text-[8px] text-slate-400 mt-1 font-bold">{new Date(item.payment_status.confirmed_at).toLocaleDateString()}</p>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-6 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {item.payment_status?.proof_url && (
+                                                        <a href={item.payment_status.proof_url} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-brand-50 text-brand-600 rounded-xl hover:bg-brand-100 transition-all shadow-sm" title="View Proof of Payment">
+                                                            <Download size={18} />
+                                                        </a>
+                                                    )}
+                                                    <button onClick={() => openInvoice(item)} className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-brand-600 rounded-xl transition-all shadow-sm">
+                                                        <FileText size={18} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    paginatedData.map((item) => (
                                     <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
                                         {activeTab === 'inquiries' && (
                                             <>
@@ -605,39 +704,8 @@ const VendorBookingsPage = () => {
                                                 </td>
                                             </>
                                         )}
-                                        {activeTab === 'earnings' && (
-                                            <>
-                                                <td className="px-8 py-6">
-                                                    <p className="text-xs font-black text-slate-400 uppercase tracking-tighter leading-tight">
-                                                        {new Date(item.payment_date).toLocaleDateString('en-GB')}
-                                                        <br />
-                                                        <span className="text-[9px] opacity-60 font-bold uppercase">{new Date(item.payment_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                                    </p>
-                                                </td>
-                                                <td className="px-8 py-6">
-                                                    <p className="font-black text-slate-900 dark:text-white">{item.event?.event_name}</p>
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">via {item.payment_method}</p>
-                                                </td>
-                                                <td className="px-8 py-6">
-                                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border ${item.is_released ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
-                                                        {item.milestone} {item.is_released ? '' : '(ESCROW)'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-8 py-6 text-right">
-                                                    <p className="font-black text-emerald-600 text-lg">+ {formatCurrency(item.amount)}</p>
-                                                </td>
-                                                <td className="px-8 py-6 text-center">
-                                                    <button 
-                                                        onClick={() => openInvoice(item)}
-                                                        className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-xl transition-all shadow-sm"
-                                                    >
-                                                        <FileText size={18} />
-                                                    </button>
-                                                </td>
-                                            </>
-                                        )}
                                     </tr>
-                                ))}
+                                )))}
                             </tbody>
                         </table>
                     )}

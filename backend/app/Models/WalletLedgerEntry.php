@@ -61,4 +61,14 @@ class WalletLedgerEntry extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function vendorPayment(): BelongsTo
+    {
+        return $this->belongsTo(VendorPayment::class, 'source_id');
+    }
+
+    public function contributionPayment(): BelongsTo
+    {
+        return $this->belongsTo(ContributionPayment::class, 'source_id');
+    }
 }
