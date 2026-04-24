@@ -19,7 +19,13 @@ const NotificationsPage = () => {
         setLoading(true);
         try {
             const res = await api.get('/notifications');
-            setNotifications(res.data.data || []);
+            // Aligned with new API structure
+            const responseData = res.data.data;
+            if (responseData && responseData.notifications) {
+                setNotifications(responseData.notifications);
+            } else {
+                setNotifications(res.data.data || []);
+            }
         } catch (error) {
             console.error("Failed to fetch notifications", error);
         } finally {

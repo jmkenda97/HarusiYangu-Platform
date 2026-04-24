@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Exports\CommitteeExport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\NotificationService;
 
 class EventController extends Controller
 {
@@ -112,6 +113,19 @@ class EventController extends Controller
                 return $event;
             });
 
+            // NOTIFY HOST
+            NotificationService::notify(
+                $request->user(),
+                "Event Created Successfully",
+                "Your event '{$event->event_name}' has been created and you have been assigned as Chairperson.",
+                [
+                    'icon' => 'CheckCircle', 
+                    'event_id' => $event->id, 
+                    'link' => "/events/{$event->id}"
+                ],
+                $request->user()
+            );
+
             return $this->successResponse('Event created successfully', $event, [], 201);
         } catch (\Exception $e) {
             \Log::error('Event Creation Failed: ' . $e->getMessage());
@@ -156,6 +170,19 @@ class EventController extends Controller
 
         $event->update($request->all());
 
+        // NOTIFY HOST
+        NotificationService::notify(
+            auth()->user(),
+            "Event Updated",
+            "The details for your event '{$event->event_name}' have been updated.",
+            [
+                'icon' => 'CheckCircle', 
+                'event_id' => $event->id, 
+                'link' => "/events/{$event->id}"
+            ],
+            auth()->user()
+        );
+
         return $this->successResponse('Event updated successfully', $event);
     }
 
@@ -168,6 +195,18 @@ class EventController extends Controller
         }
 
         $event->update(['archived_at' => now()]);
+
+        // NOTIFY HOST
+        NotificationService::notify(
+            auth()->user(),
+            "Event Archived",
+            "Your event '{$event->event_name}' has been moved to archive.",
+            [
+                'icon' => 'Trash2', 
+                'link' => "/events"
+            ],
+            auth()->user()
+        );
 
         return $this->successResponse('Event archived successfully');
     }

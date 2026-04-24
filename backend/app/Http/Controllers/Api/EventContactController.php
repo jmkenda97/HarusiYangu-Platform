@@ -12,7 +12,7 @@ use App\Exports\GuestsTemplateExport;
 use App\Imports\GuestsImport;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\GuestsExport;
-
+use App\Services\NotificationService;
 
 class EventContactController extends Controller
 {
@@ -75,6 +75,19 @@ class EventContactController extends Controller
                     'created_by' => $user->id,
                 ]);
             });
+
+            // NOTIFY HOST
+            NotificationService::notify(
+                $event->owner,
+                "Guest List Updated",
+                "{$contact->full_name} has been added to the guest list for '{$event->event_name}'.",
+                [
+                    'icon' => 'CheckCircle', 
+                    'event_id' => $event->id, 
+                    'link' => "/events/{$event->id}?tab=guests"
+                ],
+                auth()->user()
+            );
 
             return $this->successResponse('Contact added successfully', $contact, [], 201);
         } catch (\Exception $e) {
@@ -154,6 +167,19 @@ class EventContactController extends Controller
         try {
             $import = new GuestsImport($eventId);
             Excel::import($import, $request->file('file'));
+
+            // NOTIFY HOST
+            NotificationService::notify(
+                $event->owner,
+                "Bulk Guest Import Complete",
+                "Successfully imported {$import->importedCount} guests to '{$event->event_name}'.",
+                [
+                    'icon' => 'CheckCircle', 
+                    'event_id' => $event->id, 
+                    'link' => "/events/{$event->id}?tab=guests"
+                ],
+                auth()->user()
+            );
 
             return response()->json([
                 'success' => true,

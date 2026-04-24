@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Exports\BudgetExport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\NotificationService;
 
 class EventBudgetController extends Controller
 {
@@ -84,6 +85,19 @@ class EventBudgetController extends Controller
                 'priority_level' => $request->priority_level ?? 3,
             ]);
 
+            // NOTIFY HOST
+            NotificationService::notify(
+                $event->owner,
+                "Budget Updated",
+                "A new budget item '{$item->item_name}' has been added to '{$event->event_name}'.",
+                [
+                    'icon' => 'FileText', 
+                    'event_id' => $event->id, 
+                    'link' => "/events/{$event->id}?tab=budget"
+                ],
+                auth()->user()
+            );
+
             return $this->successResponse('Budget item added', $item, [], 201);
         } catch (\Exception $e) {
             return $this->errorResponse($e->getMessage(), [], 500);
@@ -108,6 +122,19 @@ class EventBudgetController extends Controller
 
         $item->update($request->only(['category_id', 'item_name', 'estimated_cost', 'description', 'budget_item_status']));
 
+        // NOTIFY HOST
+        NotificationService::notify(
+            $event->owner,
+            "Budget Item Updated",
+            "The budget item '{$item->item_name}' in '{$event->event_name}' has been updated.",
+            [
+                'icon' => 'FileText', 
+                'event_id' => $event->id, 
+                'link' => "/events/{$event->id}?tab=budget"
+            ],
+            auth()->user()
+        );
+
         return $this->successResponse('Budget item updated successfully', $item);
     }
 
@@ -120,6 +147,19 @@ class EventBudgetController extends Controller
         //$this->authorize('viewBudget', $event);
 
         $item->delete();
+
+        // NOTIFY HOST
+        NotificationService::notify(
+            $event->owner,
+            "Budget Item Removed",
+            "The budget item '{$item->item_name}' has been removed from '{$event->event_name}'.",
+            [
+                'icon' => 'Trash2', 
+                'event_id' => $event->id, 
+                'link' => "/events/{$event->id}?tab=budget"
+            ],
+            auth()->user()
+        );
 
         return $this->successResponse('Budget item deleted successfully');
     }

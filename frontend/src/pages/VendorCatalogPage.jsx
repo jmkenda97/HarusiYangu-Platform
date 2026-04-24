@@ -138,8 +138,16 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
         setLoadingBudget(true);
         try {
             const res = await api.get(`/events/${eventId}/budget`);
-            // The API returns { items: [], categories: [] }
-            setBudgetItemsList(res.data.data.items || []);
+            // Filter to only show \"Open\" budget items:
+            // 1. Not PAID or CANCELLED
+            // 2. No vendorAssignment OR vendorAssignment status is REJECTED or CANCELLED
+            const allItems = res.data.data.items || [];
+            const openItems = allItems.filter(item => {
+                const isStatusOpen = !['PAID', 'CANCELLED'].includes(item.budget_item_status);
+                const hasNoActiveVendor = !item.vendorAssignment || ['REJECTED', 'CANCELLED'].includes(item.vendorAssignment.status);
+                return isStatusOpen && hasNoActiveVendor;
+            });
+            setBudgetItemsList(openItems);
         } catch (err) {
             console.error('Failed to fetch budget items', err);
             setBudgetItemsList([]);

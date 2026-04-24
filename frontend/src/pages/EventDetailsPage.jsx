@@ -109,12 +109,12 @@ const EventDetailsPage = () => {
         const isInvoice = doc.type === 'Payment Receipt' || doc.type === 'Expense Invoice' || doc.type === 'Service Invoice';
         const isNegotiation = doc.type === 'Service Inquiry' || doc.type === 'Request for Quote';
         
-        // Dynamic Sender/Recipient Labels based on Document Type
-        const senderLabel = isNegotiation ? 'From: Event Host' : 'From: Service Provider';
-        const senderName = isNegotiation ? doc.recipient_name : (doc.business_name || 'Verified Vendor');
+        // Use the labels passed directly from the trigger functions
+        const senderLabel = doc.sender_label || (isNegotiation ? 'From: Event Host' : 'From: Service Provider');
+        const senderName = doc.sender_name || (isNegotiation ? doc.recipient_name : (doc.business_name || 'Verified Vendor'));
         
-        const recipientLabel = isNegotiation ? 'To: Service Provider' : 'To: Event Host';
-        const recipientName = isNegotiation ? (doc.business_name || 'Verified Vendor') : doc.recipient_name;
+        const recipientLabel = doc.recipient_label || (isNegotiation ? 'To: Service Provider' : 'To: Event Host');
+        const recipientName = doc.recipient_name || (isNegotiation ? (doc.business_name || 'Verified Vendor') : doc.recipient_name);
 
         // Determine the "Final" value to show in the big total box
         const documentTotal = doc.last_quote && parseFloat(doc.last_quote) > 0 ? parseFloat(doc.last_quote) : doc.amount;
@@ -592,21 +592,20 @@ const EventDetailsPage = () => {
 
     // --- VENDOR FUNCTIONS ---
     const openRFQ = (v) => {
-        // Split contract notes to extract Vendor's reply if exists
         const notesParts = (v.contract_notes || '').split("\n\nQuote Response: ");
         const hostBargainDesc = notesParts[0];
         const vendorQuoteDesc = notesParts[1] || '';
-        
         const isInvoice = ['QUOTED', 'ACCEPTED', 'COMPLETED'].includes(v.status);
-
-        // Parse target_amount correctly from metadata (it's the Host's offer)
         const hostOffer = v.metadata?.target_amount ? parseFloat(v.metadata.target_amount) : 0;
+        const hostFullName = event?.owner?.first_name ? (event.owner.first_name + ' ' + (event.owner.last_name || '')) : 'Verified Host';
 
         setSelectedDoc({
             type: isInvoice ? 'Service Invoice' : 'Service Inquiry',
             ref_number: `${isInvoice ? 'INV' : 'INQ'}-${v.id.substring(0, 8).toUpperCase()}`,
-            business_name: v.vendor?.business_name,
-            recipient_name: event?.owner?.first_name ? (event.owner.first_name + ' ' + (event.owner.last_name || '')) : 'Verified Host',
+            sender_label: isInvoice ? 'From: Service Provider' : 'From: Event Host',
+            sender_name: isInvoice ? v.vendor?.business_name : hostFullName,
+            recipient_label: isInvoice ? 'To: Event Host' : 'To: Service Provider',
+            recipient_name: isInvoice ? hostFullName : v.vendor?.business_name,
             service_name: v.assigned_service,
             description: hostBargainDesc || 'Service inquiry following verified catalog standards.',
             vendor_description: vendorQuoteDesc,
@@ -620,28 +619,25 @@ const EventDetailsPage = () => {
 
     const openInvoice = (entry) => {
         if (!entry) return;
-
-        // --- DEEP DATA SEARCH BROO ---
-        // 1. Try to find name in metadata
-        // 2. Try to find name in description (e.g. "Contribution from John")
-        // 3. Fallback to Event Owner
         let recipient = entry.metadata?.contact_name || entry.metadata?.vendor_name;
-
         if (!recipient && entry.description?.includes('from ')) {
             recipient = entry.description.split('from ')[1].split(' via')[0];
         }
-
         if (!recipient) {
             recipient = event?.owner?.first_name ? (event.owner.first_name + ' ' + (event.owner.last_name || '')) : 'Verified Member';
         }
 
         const sourceTypeLabel = (entry.source_type || 'Transaction').replace(/_/g, ' ');
+        const isCredit = entry.entry_type === 'CREDIT';
+        const hostFullName = event?.owner?.first_name ? (event.owner.first_name + ' ' + (event.owner.last_name || '')) : 'Verified Host';
 
         setSelectedDoc({
-            type: entry.entry_type === 'CREDIT' ? 'Payment Receipt' : 'Expense Invoice',
+            type: isCredit ? 'Payment Receipt' : 'Expense Invoice',
             ref_number: `REF-${(entry.id || '0000').substring(0, 8).toUpperCase()}`,
-            recipient_name: recipient,
-            recipient_contact: entry.entry_type === 'CREDIT' ? 'Platform Contributor' : 'Service Provider',
+            sender_label: isCredit ? 'From: Contributor' : 'From: Event Host',
+            sender_name: isCredit ? recipient : hostFullName,
+            recipient_label: isCredit ? 'To: Event Host' : 'To: Service Provider',
+            recipient_name: isCredit ? hostFullName : (entry.metadata?.vendor_name || 'Service Provider'),
             service_name: entry.description || 'Verified Financial Movement',
             description: `This transaction was successfully processed and verified via ${sourceTypeLabel}.`,
             amount: entry.amount || 0,
@@ -1239,9 +1235,6 @@ const EventDetailsPage = () => {
                                                     </td>
                                                     <td className="px-6 py-4 text-right">
                                                         <div className="flex items-center justify-end gap-2">
-                                                            {entry.payment_status?.proof_url && (
-                                                                <a href={entry.payment_status.proof_url} target="_blank" rel="noopener noreferrer" className="p-2 text-slate-400 hover:text-brand-600 transition-all"><Download size={16} /></a>
-                                                            )}
                                                             <button onClick={() => openInvoice(entry)} className="p-2 text-slate-400 hover:text-brand-600 transition-all"><FileText size={16} /></button>
                                                         </div>
                                                     </td>

@@ -7,7 +7,8 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str; // <--- 1. ADDED THIS IMPORT
+use Illuminate\Support\Str;
+use App\Services\NotificationService;
 
 class UserController extends Controller
 {
@@ -65,6 +66,14 @@ class UserController extends Controller
 
         // 5. UPDATE THE USER
         $user->update($data);
+
+        // NOTIFY USER (Security Alert)
+        NotificationService::notify(
+            $user,
+            "Profile Updated",
+            "Your profile details have been successfully updated. If you did not perform this action, please contact support immediately.",
+            ['icon' => 'Shield', 'link' => '/profile']
+        );
 
         // 6. RETURN SUCCESS
         return $this->successResponse('Profile updated successfully', new UserResource($user));

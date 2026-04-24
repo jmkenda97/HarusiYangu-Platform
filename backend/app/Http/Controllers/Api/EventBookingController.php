@@ -63,7 +63,12 @@ class EventBookingController extends Controller
             $vendor->user,
             "New Inquiry for " . $event->event_name,
             "A host has sent you an inquiry for " . $request->assigned_service . ". Please review and provide a quote.",
-            ['icon' => 'MessageSquare', 'event_id' => $eventId, 'booking_id' => $eventVendor->id],
+            [
+                'icon' => 'MessageSquare', 
+                'event_id' => $eventId, 
+                'booking_id' => $eventVendor->id,
+                'link' => '/vendor/dashboard'
+            ],
             auth()->user()
         );
 
@@ -337,7 +342,11 @@ class EventBookingController extends Controller
                 $booking->vendor->user,
                 "Inquiry Cancelled",
                 "The host of " . $booking->event->event_name . " has cancelled their inquiry/request for " . $booking->assigned_service . ".",
-                ['icon' => 'XCircle', 'event_id' => $booking->event_id],
+                [
+                    'icon' => 'XCircle', 
+                    'event_id' => $booking->event_id,
+                    'link' => '/vendor/dashboard'
+                ],
                 auth()->user()
             );
 

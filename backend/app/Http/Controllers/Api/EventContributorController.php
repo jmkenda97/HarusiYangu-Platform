@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Exports\ContributorsExport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\NotificationService;
 
 class EventContributorController extends Controller
 {
@@ -80,8 +81,21 @@ class EventContributorController extends Controller
                     'assigned_by' => $user->id,
                 ]);
 
-                return $contactId;
+                return $contact;
             });
+
+            // NOTIFY HOST
+            NotificationService::notify(
+                $event->owner,
+                "New Pledge Recorded",
+                "A new pledge of TZS " . number_format($request->pledge_amount) . " has been recorded for '{$event->event_name}'.",
+                [
+                    'icon' => 'DollarSign', 
+                    'event_id' => $event->id, 
+                    'link' => "/events/{$event->id}?tab=contributions"
+                ],
+                auth()->user()
+            );
 
             return $this->successResponse('Pledge added successfully', [], [], 201);
         } catch (\Exception $e) {

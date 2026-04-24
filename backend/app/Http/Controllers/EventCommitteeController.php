@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
+use App\Services\NotificationService;
 
 class EventCommitteeController extends Controller
 {
@@ -126,6 +127,19 @@ class EventCommitteeController extends Controller
                 'added_by' => auth()->id(),
             ], $flags));
 
+            // NOTIFY USER
+            NotificationService::notify(
+                $user,
+                "Added to Committee: " . $event->event_name,
+                "You have been added to the committee for '{$event->event_name}' as a " . ucfirst(strtolower($role)) . ".",
+                [
+                    'icon' => 'Briefcase', 
+                    'event_id' => $eventId, 
+                    'link' => "/events/{$eventId}"
+                ],
+                auth()->user()
+            );
+
             return $this->successResponse('Committee member added successfully', $member, [], 201);
         });
     }
@@ -165,6 +179,19 @@ class EventCommitteeController extends Controller
             'can_manage_vendors' => in_array($role, ['CHAIRPERSON', 'COORDINATOR']),
             'can_scan_cards' => in_array($role, ['CHAIRPERSON', 'GATE_OFFICER']),
         ]);
+
+        // NOTIFY USER
+        NotificationService::notify(
+            $user,
+            "Committee Role Updated",
+            "Your role in '{$event->event_name}' has been updated to " . ucfirst(strtolower($role)) . ".",
+            [
+                'icon' => 'Briefcase', 
+                'event_id' => $eventId, 
+                'link' => "/events/{$eventId}"
+            ],
+            auth()->user()
+        );
 
         return $this->successResponse('Committee member updated successfully', $member);
     }
