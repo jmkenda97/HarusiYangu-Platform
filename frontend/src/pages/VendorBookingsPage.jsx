@@ -113,6 +113,13 @@ const ProfessionalDocumentModal = ({ doc, businessName, onClose, onConfirmReceip
     const isInvoice = doc.type === 'Payment Receipt';
     const isMilestoneInvoice = doc.type === 'Service Invoice';
     
+    // Dynamic Sender/Recipient Labels based on Document Type
+    const senderLabel = doc.sender_label || 'From: Service Provider';
+    const senderName = doc.sender_name || businessName || 'N/A';
+    
+    const recipientLabel = doc.recipient_label || 'To: Event Host';
+    const recipientName = doc.recipient_name || 'N/A';
+
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
             <style>
@@ -150,14 +157,14 @@ const ProfessionalDocumentModal = ({ doc, businessName, onClose, onConfirmReceip
                     {/* Parties Section */}
                     <div className="grid grid-cols-2 gap-12">
                         <div className="space-y-1">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">From: Service Provider</p>
-                            <p className="font-black text-slate-900 dark:text-white text-base">{businessName || 'N/A'}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{doc.vendor_phone || 'Verified Marketplace Vendor'}</p>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">{senderLabel}</p>
+                            <p className="font-black text-slate-900 dark:text-white text-base">{senderName}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{isInvoice || isMilestoneInvoice ? (doc.vendor_phone || 'Verified Marketplace Vendor') : 'Event Host'}</p>
                         </div>
                         <div className="text-right space-y-1">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">To: Event Host</p>
-                            <p className="font-black text-slate-900 dark:text-white text-base">{doc.recipient_name}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Customer Engagement</p>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">{recipientLabel}</p>
+                            <p className="font-black text-slate-900 dark:text-white text-base">{recipientName}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{isInvoice || isMilestoneInvoice ? 'Customer Engagement' : 'Professional Service Provider'}</p>
                         </div>
                     </div>
 
@@ -364,7 +371,10 @@ const VendorBookingsPage = () => {
         setSelectedDoc({
             type: isInvoice ? 'Service Invoice' : 'Service Inquiry',
             ref_number: `${isInvoice ? 'INV' : 'INQ'}-${inquiry.id.substring(0, 8).toUpperCase()}`,
-            recipient_name: inquiry.host_name,
+            sender_label: isInvoice ? 'From: Service Provider' : 'From: Event Host',
+            sender_name: isInvoice ? (data?.profile?.business_name || 'Verified Vendor') : inquiry.host_name,
+            recipient_label: isInvoice ? 'To: Event Host' : 'To: Service Provider',
+            recipient_name: isInvoice ? inquiry.host_name : (data?.profile?.business_name || 'Verified Vendor'),
             service_name: inquiry.assigned_service,
             description: inquiry.contract_notes,
             amount: inquiry.last_quote_amount || inquiry.metadata?.target_amount || 0,
@@ -375,19 +385,27 @@ const VendorBookingsPage = () => {
         });
     };
 
-    const openInvoice = (payment) => {
+    const openInvoice = (entry) => {
+        const isLedger = entry.source_type === 'VENDOR_PAYMENT';
+        const paymentId = isLedger ? entry.source_id : entry.id;
+        const hostName = entry.metadata?.host_name || 'Event Host';
+        const vendorName = data?.profile?.business_name || 'Verified Vendor';
+
         setSelectedDoc({
             type: 'Payment Receipt',
-            ref_number: `PAY-${payment.id.substring(0, 8).toUpperCase()}`,
-            recipient_name: 'Event Host',
-            service_name: `Milestone Payment: ${payment.milestone}`,
-            description: `Payment for event services recorded on ${new Date(payment.payment_date).toLocaleDateString()}`,
-            amount: payment.amount,
+            ref_number: `PAY-${(paymentId || '0000').substring(0, 8).toUpperCase()}`,
+            sender_label: 'From: Event Host',
+            sender_name: hostName,
+            recipient_label: 'To: Service Provider',
+            recipient_name: vendorName,
+            service_name: `Milestone Payment: ${entry.milestone || entry.metadata?.milestone || 'Disbursement'}`,
+            description: entry.description || `Payment for event services recorded on ${new Date(entry.payment_date || entry.entry_date).toLocaleDateString()}`,
+            amount: entry.amount,
             is_paid: true,
-            is_released: payment.is_released,
-            is_vendor_confirmed: payment.is_vendor_confirmed,
-            payment_id: payment.id,
-            notes: `Reference: ${payment.transaction_reference || 'N/A'}. This is a ${payment.is_released ? 'direct' : 'escrow'} transaction.`
+            is_released: isLedger ? entry.payment_status?.is_released : entry.is_released,
+            is_vendor_confirmed: isLedger ? entry.payment_status?.is_confirmed : entry.is_vendor_confirmed,
+            payment_id: paymentId,
+            notes: `Reference: ${entry.payment_status?.reference || entry.transaction_reference || 'N/A'}. This is a verified transaction.`
         });
     };
 
@@ -618,11 +636,6 @@ const VendorBookingsPage = () => {
                                             </td>
                                             <td className="px-8 py-6 text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    {item.payment_status?.proof_url && (
-                                                        <a href={item.payment_status.proof_url} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-brand-50 text-brand-600 rounded-xl hover:bg-brand-100 transition-all shadow-sm" title="View Proof of Payment">
-                                                            <Download size={18} />
-                                                        </a>
-                                                    )}
                                                     <button onClick={() => openInvoice(item)} className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-brand-600 rounded-xl transition-all shadow-sm">
                                                         <FileText size={18} />
                                                     </button>

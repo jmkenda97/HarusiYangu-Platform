@@ -11,7 +11,9 @@ import {
     Building2, 
     Star,
     X,
-    Info
+    Info,
+    Clock,
+    Save
 } from 'lucide-react';
 
 const formatLabel = (value) => value?.replace(/_/g, ' ') || '';
