@@ -39,6 +39,8 @@ const EventDetailsPage = () => {
     const [ledgerTotal, setLedgerTotal] = useState(0);
     const [ledgerSearch, setLedgerSearch] = useState('');
     const [ledgerMonth, setLedgerMonth] = useState('');
+    const [ledgerStartDate, setLedgerStartDate] = useState('');
+    const [ledgerEndDate, setLedgerEndDate] = useState('');
     const [ledgerType, setLedgerType] = useState('');
 
     // --- SEARCH STATES ---
@@ -91,8 +93,10 @@ const EventDetailsPage = () => {
     });
     const [editingCommitteeMember, setEditingCommitteeMember] = useState(null);
     const [committeeResult, setCommitteeResult] = useState(null);
+    const [vendorResult, setVendorResult] = useState(null);
+    const [isLoadingPaymentInfo, setIsLoadingPaymentInfo] = useState(false);
 
-    // --- BULK IMPORT STATES ---
+    // --- COMMITTEE STATES ---
     const [importFile, setImportFile] = useState(null);
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState(null);
@@ -102,13 +106,18 @@ const EventDetailsPage = () => {
 
     const ProfessionalDocumentModal = ({ doc, event, onClose }) => {
         if (!doc) return null;
-        const isInvoice = doc.type === 'Payment Receipt' || doc.type === 'Expense Invoice';
-        const isMilestoneInvoice = doc.type === 'Service Invoice';
+        const isInvoice = doc.type === 'Payment Receipt' || doc.type === 'Expense Invoice' || doc.type === 'Service Invoice';
         const isNegotiation = doc.type === 'Service Inquiry' || doc.type === 'Request for Quote';
-        const businessName = doc.business_name || (doc.type.includes('Inquiry') ? doc.business_name : 'Service Provider');
+        
+        // Dynamic Sender/Recipient Labels based on Document Type
+        const senderLabel = isNegotiation ? 'From: Event Host' : 'From: Service Provider';
+        const senderName = isNegotiation ? doc.recipient_name : (doc.business_name || 'Verified Vendor');
+        
+        const recipientLabel = isNegotiation ? 'To: Service Provider' : 'To: Event Host';
+        const recipientName = isNegotiation ? (doc.business_name || 'Verified Vendor') : doc.recipient_name;
 
         // Determine the "Final" value to show in the big total box
-        const documentTotal = doc.last_quote && doc.last_quote > 0 ? doc.last_quote : doc.amount;
+        const documentTotal = doc.last_quote && parseFloat(doc.last_quote) > 0 ? parseFloat(doc.last_quote) : doc.amount;
 
         return (
             <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
@@ -135,10 +144,10 @@ const EventDetailsPage = () => {
                         <div className="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-8">
                             <div>
                                 <h1 className="font-black text-2xl text-brand-600 tracking-tighter uppercase">HarusiYangu</h1>
-                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">{isInvoice ? 'Official Financial Statement' : 'Service Inquiry Request'}</p>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">{isNegotiation ? 'Official Service Inquiry' : 'Financial Statement / Invoice'}</p>
                             </div>
                             <div className="text-right">
-                                <h2 className={`text-2xl font-black uppercase tracking-tighter ${isInvoice ? 'text-emerald-600' : 'text-brand-600'}`}>{isInvoice ? 'RECEIPT' : 'INQUIRY'}</h2>
+                                <h2 className={`text-2xl font-black uppercase tracking-tighter ${isInvoice ? 'text-emerald-600' : 'text-brand-600'}`}>{isInvoice ? 'INVOICE' : 'INQUIRY'}</h2>
                                 <p className="text-slate-500 dark:text-slate-400 font-bold text-xs mt-1">Ref: {doc.ref_number}</p>
                                 <p className="text-slate-400 font-bold text-[9px] uppercase mt-1">{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                             </div>
@@ -147,113 +156,79 @@ const EventDetailsPage = () => {
                         {/* Parties Section */}
                         <div className="grid grid-cols-2 gap-12">
                             <div className="space-y-1">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">From: Service Provider</p>
-                                <p className="font-black text-slate-900 dark:text-white text-base">{businessName || 'Verified Vendor'}</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">Verified Marketplace Partner</p>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">{senderLabel}</p>
+                                <p className="font-black text-slate-900 dark:text-white text-base">{senderName}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{isNegotiation ? (event?.event_name || 'Private Event') : 'Verified Marketplace Partner'}</p>
                             </div>
                             <div className="text-right space-y-1">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">To: Event Host</p>
-                                <p className="font-black text-slate-900 dark:text-white text-base">{doc.recipient_name}</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{event.event_name}</p>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">{recipientLabel}</p>
+                                <p className="font-black text-slate-900 dark:text-white text-base">{recipientName}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{isNegotiation ? 'Professional Vendor' : (event?.event_name || 'Private Event')}</p>
                             </div>
                         </div>
 
-                        {/* Milestones Structure (Special for Service Invoice) */}
-                        {isMilestoneInvoice && doc.milestones && (
-                            <div className="space-y-4">
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                    <Activity size={14} className="text-brand-600" /> Payment Schedule (30/30/40 Rule)
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    {Object.entries(doc.milestones).filter(([k]) => k.startsWith('phase')).map(([key, phase]) => (
-                                        <div key={key} className="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">{phase.name}</p>
-                                            <p className="text-lg font-black text-slate-900 dark:text-white leading-none mb-2">{formatCurrency(phase.amount)}</p>
-                                            <p className="text-[9px] text-slate-500 leading-relaxed font-medium italic">"{phase.description}"</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Payout Instructions (Special for Service Invoice) */}
-                        {isMilestoneInvoice && doc.milestones?.payment_instructions && (
-                            <div className="p-6 rounded-2xl bg-brand-50/30 dark:bg-brand-900/10 border border-brand-100 dark:border-brand-900/20">
-                                <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <Wallet size={14} /> Official Payout Instructions
-                                </h3>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                    <div>
-                                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Provider</p>
-                                        <p className="text-xs font-bold text-slate-900 dark:text-white uppercase">{doc.milestones.payment_instructions.provider}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Account Holder</p>
-                                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{doc.milestones.payment_instructions.account_name}</p>
-                                    </div>
-                                    <div className="col-span-2">
-                                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Account Number / Phone</p>
-                                        <p className="text-xs font-mono font-black text-brand-600 dark:text-brand-400 select-all">{doc.milestones.payment_instructions.account_number}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
                         {/* Itemized Breakdown Section */}
-                        {!isMilestoneInvoice && (
-                            <div className="space-y-4">
-                                <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 flex justify-between rounded-t-xl border-x border-t border-slate-200 dark:border-slate-800">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Document Breakdown</span>
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount (TZS)</span>
+                        <div className="space-y-4">
+                            <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 flex justify-between rounded-t-xl border-x border-t border-slate-200 dark:border-slate-800">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Description of Service</span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount (TZS)</span>
+                            </div>
+                            
+                            <div className="border border-slate-200 dark:border-slate-800 rounded-b-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                                {/* Row 1: Primary Service & Host Bargain */}
+                                <div className="p-6 bg-white dark:bg-slate-900">
+                                    <div className="flex justify-between items-start gap-8">
+                                        <div className="flex-1">
+                                            <p className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-1">{isNegotiation ? 'Service Required' : 'Contracted Service'}</p>
+                                            <p className="font-black text-slate-900 dark:text-white text-lg mb-2">{doc.service_name}</p>
+                                            <div className="p-4 bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                                                <p className="text-[8px] font-black text-slate-400 uppercase mb-1">{isNegotiation ? 'Host Inquiry Notes' : 'Contract Notes'}</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed italic">"{doc.description || 'Service details provided via platform.'}"</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{isNegotiation ? 'Host Initial Offer' : 'Subtotal'}</p>
+                                            <p className="font-black text-xl text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(doc.amount)}</p>
+                                        </div>
+                                    </div>
                                 </div>
-                                
-                                <div className="border border-slate-200 dark:border-slate-800 rounded-b-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-                                    {/* Row 1: Host Initial Offer */}
-                                    <div className="p-6 bg-white dark:bg-slate-900">
+
+                                {/* Row 2: Vendor Response (Only in Inquiry/Invoice if quote changed) */}
+                                {doc.last_quote && parseFloat(doc.last_quote) > 0 && parseFloat(doc.last_quote) !== parseFloat(doc.amount) && (
+                                    <div className="p-6 bg-emerald-50/20 dark:bg-emerald-900/5 border-l-4 border-emerald-500">
                                         <div className="flex justify-between items-start gap-8">
                                             <div className="flex-1">
-                                                <p className="text-[9px] font-black text-brand-600 uppercase tracking-widest mb-1">Host Initial Bargain</p>
-                                                <p className="font-black text-slate-900 dark:text-white text-base mb-1">{doc.service_name}</p>
-                                                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">"{doc.description || 'Service details provided via platform.'}"</p>
+                                                <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Vendor Official Quote</p>
+                                                <p className="font-black text-slate-900 dark:text-white text-base mb-2">Quote Adjustment</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
+                                                    "{doc.vendor_description || 'The vendor has provided an updated quote for this service.'}"
+                                                </p>
                                             </div>
-                                            <p className="font-black text-lg text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(doc.amount)}</p>
+                                            <div className="text-right">
+                                                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Adjusted Total</p>
+                                                <p className="font-black text-xl text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(doc.last_quote)}</p>
+                                            </div>
                                         </div>
                                     </div>
-
-                                    {/* Row 2: Vendor Reply (If exists) */}
-                                    {isNegotiation && doc.last_quote && doc.last_quote > 0 && (
-                                        <div className="p-6 bg-slate-50/50 dark:bg-brand-900/5">
-                                            <div className="flex justify-between items-start gap-8">
-                                                <div className="flex-1">
-                                                    <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Vendor Quote Response</p>
-                                                    <p className="font-black text-slate-900 dark:text-white text-base mb-1">Professional Quote Adjustment</p>
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed italic">
-                                                        "{doc.vendor_description || 'Vendor has provided a quote adjustment for the requested service.'}"
-                                                    </p>
-                                                </div>
-                                                <p className="font-black text-lg text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(doc.last_quote)}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                                )}
                             </div>
-                        )}
+                        </div>
 
                         {/* Status & Summary Footer */}
                         <div className="flex flex-col md:flex-row justify-between items-center gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
                             <div className={`inline-flex items-center gap-2.5 px-4 py-2 rounded-full border-2 ${doc.is_paid ? 'border-emerald-500/20 bg-emerald-50/5 text-emerald-600' : 'border-brand-500/20 bg-brand-50/5 text-brand-600'}`}>
                                 <div className={`h-2 w-2 rounded-full animate-pulse ${doc.is_paid ? 'bg-emerald-500' : 'bg-brand-500'}`}></div>
-                                <span className="text-[10px] font-black uppercase tracking-widest">{doc.is_paid ? 'Transaction Verified' : 'Status: Negotiation Pending'}</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest">{doc.is_paid ? 'Transaction Completed' : 'Status: Negotiation Pending'}</span>
                             </div>
 
                             <div className="bg-slate-900 dark:bg-brand-600 text-white rounded-2xl px-8 py-4 text-center min-w-[240px] shadow-lg shadow-brand-500/10">
-                                <p className="text-[8px] font-black uppercase tracking-widest mb-1 opacity-60">Current Total Document Value</p>
+                                <p className="text-[8px] font-black uppercase tracking-widest mb-1 opacity-60">{isNegotiation ? 'Current Document Value' : 'Total Invoice Amount'}</p>
                                 <p className="text-2xl font-black">{formatCurrency(documentTotal)}</p>
                             </div>
                         </div>
 
                         <div className="text-center pt-8">
-                            <p className="text-[9px] text-slate-400 font-medium italic">Thank you for choosing HarusiYangu Marketplace. This is a system-generated document.</p>
+                            <p className="text-[9px] text-slate-400 font-medium italic">Thank you for choosing HarusiYangu Marketplace. This is an official system-generated document.</p>
                         </div>
                     </div>
 
@@ -624,6 +599,9 @@ const EventDetailsPage = () => {
         
         const isInvoice = ['QUOTED', 'ACCEPTED', 'COMPLETED'].includes(v.status);
 
+        // Parse target_amount correctly from metadata (it's the Host's offer)
+        const hostOffer = v.metadata?.target_amount ? parseFloat(v.metadata.target_amount) : 0;
+
         setSelectedDoc({
             type: isInvoice ? 'Service Invoice' : 'Service Inquiry',
             ref_number: `${isInvoice ? 'INV' : 'INQ'}-${v.id.substring(0, 8).toUpperCase()}`,
@@ -632,7 +610,7 @@ const EventDetailsPage = () => {
             service_name: v.assigned_service,
             description: hostBargainDesc || 'Service inquiry following verified catalog standards.',
             vendor_description: vendorQuoteDesc,
-            amount: v.metadata?.target_amount || 0,
+            amount: hostOffer,
             last_quote: v.last_quote_amount,
             milestones: v.metadata?.milestones || null,
             vendor_phone: v.vendor?.phone,
@@ -676,7 +654,10 @@ const EventDetailsPage = () => {
         try {
             const res = await api.get(`/events/${id}/vendors`);
             setVendors(res.data.data || []);
-        } catch (err) { console.error(err); }
+        } catch (err) { 
+            console.error(err);
+            setVendorResult({ type: 'error', message: "Failed to load vendors." });
+        }
     };
 
     const handleAcceptQuote = async (bookingId) => {
@@ -684,11 +665,11 @@ const EventDetailsPage = () => {
         setIsSubmitting(true);
         try {
             await api.put(`/bookings/${bookingId}/accept`);
-            fetchVendors();
+            await fetchVendors();
             fetchBudget();
-            alert("Quote accepted successfully!");
+            setVendorResult({ type: 'success', message: "Quote accepted successfully! Vendor notified." });
         } catch (err) {
-            alert(err.response?.data?.message || "Failed to accept quote");
+            setVendorResult({ type: 'error', message: err.response?.data?.message || "Failed to accept quote" });
         } finally {
             setIsSubmitting(false);
         }
@@ -699,11 +680,25 @@ const EventDetailsPage = () => {
         setIsSubmitting(true);
         try {
             await api.put(`/bookings/${bookingId}/confirm-service`);
-            fetchVendors();
+            await fetchVendors();
             fetchEventDetails();
-            alert("Service confirmed! Funds have been released to the vendor wallet.");
+            setVendorResult({ type: 'success', message: "Service confirmed! Funds released to vendor wallet." });
         } catch (err) {
-            alert(err.response?.data?.message || "Failed to confirm service");
+            setVendorResult({ type: 'error', message: err.response?.data?.message || "Failed to confirm service" });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteVendor = async (bookingId) => {
+        if (!confirm("Are you sure you want to cancel this inquiry? This will notify the vendor.")) return;
+        setIsSubmitting(true);
+        try {
+            await api.delete(`/bookings/${bookingId}`);
+            await fetchVendors();
+            setVendorResult({ type: 'success', message: "Inquiry cancelled successfully." });
+        } catch (err) {
+            setVendorResult({ type: 'error', message: err.response?.data?.message || "Failed to cancel inquiry" });
         } finally {
             setIsSubmitting(false);
         }
@@ -712,6 +707,7 @@ const EventDetailsPage = () => {
     const openVendorPaymentModal = async (booking) => {
         setSelectedVendorBooking(booking);
         setIsVendorPaymentModalOpen(true);
+        setIsLoadingPaymentInfo(true);
         try {
             const res = await api.get(`/bookings/${booking.id}/payments`);
             const data = res.data.data;
@@ -723,12 +719,17 @@ const EventDetailsPage = () => {
             }));
         } catch (err) {
             console.error("Failed to load payment info", err);
+        } finally {
+            setIsLoadingPaymentInfo(false);
         }
     };
 
     const handleRecordVendorPayment = async (e) => {
         e.preventDefault();
-        if (!vendorPaymentData.amount || parseFloat(vendorPaymentData.amount) <= 0) return alert("Please enter a valid amount");
+        if (!vendorPaymentData.amount || parseFloat(vendorPaymentData.amount) <= 0) {
+            setVendorResult({ type: 'error', message: "Please enter a valid amount" });
+            return;
+        }
 
         setIsSubmitting(true);
         try {
@@ -748,11 +749,11 @@ const EventDetailsPage = () => {
             });
             
             setIsVendorPaymentModalOpen(false);
-            fetchVendors();
+            await fetchVendors();
             fetchEventDetails();
-            alert("Vendor payment recorded successfully!");
+            setVendorResult({ type: 'success', message: "Vendor payment recorded successfully!" });
         } catch (err) {
-            alert(err.response?.data?.message || "Payment recording failed");
+            setVendorResult({ type: 'error', message: err.response?.data?.message || "Payment recording failed" });
         } finally {
             setIsSubmitting(false);
         }
@@ -1135,18 +1136,37 @@ const EventDetailsPage = () => {
                         </div>
 
                         {/* Search & Filter Bar BROO */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                            <div className="md:col-span-2 relative">
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                            <div className="md:col-span-1 relative">
                                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
                                 <input 
                                     type="text" 
-                                    placeholder="Search description or reference..." 
-                                    className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold"
+                                    placeholder="Search description..." 
+                                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold"
                                     value={ledgerSearch}
                                     onChange={e => setLedgerSearch(e.target.value)}
                                 />
                             </div>
                             <div>
+                                <label className="block text-[8px] font-black text-slate-400 uppercase ml-1 mb-1">From Date</label>
+                                <input 
+                                    type="date" 
+                                    className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold"
+                                    value={ledgerStartDate}
+                                    onChange={e => setLedgerStartDate(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[8px] font-black text-slate-400 uppercase ml-1 mb-1">To Date</label>
+                                <input 
+                                    type="date" 
+                                    className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold"
+                                    value={ledgerEndDate}
+                                    onChange={e => setLedgerEndDate(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[8px] font-black text-slate-400 uppercase ml-1 mb-1">By Month</label>
                                 <input 
                                     type="month" 
                                     className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold"
@@ -1154,15 +1174,18 @@ const EventDetailsPage = () => {
                                     onChange={e => setLedgerMonth(e.target.value)}
                                 />
                             </div>
-                            <select 
-                                className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold"
-                                value={ledgerType}
-                                onChange={e => setLedgerType(e.target.value)}
-                            >
-                                <option value="">All Types</option>
-                                <option value="CREDIT">Inflow (+)</option>
-                                <option value="DEBIT">Outflow (-)</option>
-                            </select>
+                            <div>
+                                <label className="block text-[8px] font-black text-slate-400 uppercase ml-1 mb-1">Type</label>
+                                <select 
+                                    className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-brand-500 bg-transparent dark:text-white font-bold appearance-none"
+                                    value={ledgerType}
+                                    onChange={e => setLedgerType(e.target.value)}
+                                >
+                                    <option value="">All Types</option>
+                                    <option value="CREDIT">Inflow (+)</option>
+                                    <option value="DEBIT">Outflow (-)</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -1301,6 +1324,17 @@ const EventDetailsPage = () => {
                             <div className="absolute -right-10 -bottom-10 opacity-20 pointer-events-none transform rotate-12"><Briefcase size={200} /></div>
                         </div>
 
+                        {/* VENDOR FEEDBACK BANNER */}
+                        {vendorResult && (
+                            <div className={`p-4 rounded-xl border animate-in zoom-in duration-300 flex items-center justify-between ${vendorResult.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                                <div className="flex items-center gap-3">
+                                    {vendorResult.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
+                                    <p className="text-sm font-bold">{vendorResult.message}</p>
+                                </div>
+                                <button onClick={() => setVendorResult(null)} className="p-1 hover:bg-black/5 rounded-full"><X size={16} /></button>
+                            </div>
+                        )}
+
                         {/* NEGOTIATIONS SECTION - NOW AT THE TOP */}
                         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
                             <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
@@ -1313,7 +1347,11 @@ const EventDetailsPage = () => {
                                         <tr><th className="px-6 py-4">#</th><th className="px-6 py-4">Vendor</th><th className="px-6 py-4">Current Status</th><th className="px-6 py-4 text-right">Last Quote</th><th className="px-6 py-4 text-right">Actions</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                        {vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).length === 0 ? <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic font-medium">No active inquiries at the moment.</td></tr> : vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).map((v, idx) => (
+                                        {isTabLoading ? (
+                                            <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">Loading inquiries...</td></tr>
+                                        ) : vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).length === 0 ? (
+                                            <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic font-medium">No active inquiries at the moment.</td></tr>
+                                        ) : vendors.filter(v => ['INQUIRY', 'QUOTED'].includes(v.status)).map((v, idx) => (
                                             <tr key={v.id} className="hover:bg-slate-50/50 transition-colors group">
                                                 <td className="px-6 py-4 text-center font-mono text-xs text-slate-300">{idx + 1}</td>
                                                 <td className="px-6 py-4"><div className="font-bold text-slate-900 dark:text-white">{v.vendor?.business_name}</div><div className="text-[10px] font-medium text-slate-400 uppercase">{v.assigned_service}</div></td>
@@ -1345,7 +1383,11 @@ const EventDetailsPage = () => {
                                         <tr><th className="px-6 py-4">#</th><th className="px-6 py-4">Vendor Details</th><th className="px-6 py-4">Service Type</th><th className="px-6 py-4 text-right">Contracted</th><th className="px-6 py-4 text-right">Payments</th><th className="px-6 py-4 text-right">Balance</th><th className="px-6 py-4 text-right">Actions</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                        {vendors.filter(v => v.status === 'ACCEPTED').length === 0 ? <tr><td colSpan="7" className="px-6 py-16 text-center text-slate-400 italic">No confirmed hires yet. Find vendors in the catalog.</td></tr> : vendors.filter(v => v.status === 'ACCEPTED').map((v, idx) => (
+                                        {isTabLoading ? (
+                                            <tr><td colSpan="7" className="px-6 py-16 text-center text-slate-400 italic">Loading confirmed hires...</td></tr>
+                                        ) : vendors.filter(v => v.status === 'ACCEPTED').length === 0 ? (
+                                            <tr><td colSpan="7" className="px-6 py-16 text-center text-slate-400 italic">No confirmed hires yet. Find vendors in the catalog.</td></tr>
+                                        ) : vendors.filter(v => v.status === 'ACCEPTED').map((v, idx) => (
                                             <tr key={v.id} className="hover:bg-slate-50/50 transition-colors group">
                                                 <td className="px-6 py-4 text-center font-mono text-xs text-slate-300">{idx + 1}</td>
                                                 <td className="px-6 py-4"><div className="font-black text-slate-900 dark:text-white text-base">{v.vendor?.business_name}</div><div className="text-[10px] font-bold text-slate-400 mt-0.5 flex items-center gap-1 uppercase tracking-tighter"><Phone size={10} /> {v.vendor?.phone}</div></td>
@@ -1497,9 +1539,20 @@ const EventDetailsPage = () => {
             {/* VENDOR PAYMENT MODAL (Preserved for logic) */}
             {isVendorPaymentModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800">
-                        <div className="bg-slate-50 dark:bg-slate-800/50 px-10 py-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center"><h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Vendor Milestone</h3><button onClick={() => setIsVendorPaymentModalOpen(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={24} /></button></div>
-                        <form onSubmit={handleRecordVendorPayment} className="p-10 space-y-6">
+                    <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-md max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800 relative">
+                        {/* LOADING OVERLAY */}
+                        {isLoadingPaymentInfo && (
+                            <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 z-20 flex flex-col items-center justify-center backdrop-blur-[2px]">
+                                <Loader2 className="animate-spin text-brand-600 mb-4" size={48} />
+                                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 animate-pulse">Calculating Milestones...</p>
+                            </div>
+                        )}
+
+                        <div className="bg-slate-50 dark:bg-slate-800/50 px-10 py-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center flex-shrink-0">
+                            <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Vendor Milestone</h3>
+                            <button onClick={() => setIsVendorPaymentModalOpen(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={24} /></button>
+                        </div>
+                        <form onSubmit={handleRecordVendorPayment} className="p-10 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
                             {vendorPaymentInfo && (
                                 <div className="bg-brand-50 dark:bg-brand-900/20 p-6 rounded-[24px] border border-brand-100 dark:border-brand-800 shadow-inner flex justify-between items-center text-center">
                                     <div className="flex-1"><p className="text-[10px] font-black text-brand-600 uppercase tracking-[0.2em] mb-1">Event Wallet</p><p className="text-xl font-black text-slate-950 dark:text-brand-50">{formatCurrency(vendorPaymentInfo.event_wallet_balance)}</p></div>
@@ -1554,7 +1607,7 @@ const EventDetailsPage = () => {
                                             <span className="font-black">Click to upload</span> or drag and drop
                                         </p>
                                         <p className="text-[10px] text-slate-400 uppercase tracking-tighter">
-                                            {vendorPaymentData.proof_attachment ? vendorPaymentData.proof_attachment.name : 'JPG, PNG or PDF (MAX. 5MB)'}
+                                            {vendorPaymentData.proof_attachment ? vendorPaymentData.proof_attachment.name : 'JPG, PNG or PDF (MAX. 10MB)'}
                                         </p>
                                     </div>
                                     <input 
@@ -1566,7 +1619,10 @@ const EventDetailsPage = () => {
                                 </label>
                             </div>
 
-                            <div className="pt-4"><button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 dark:bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-black/20 flex items-center justify-center gap-3">{isSubmitting ? 'Processing Disbursement...' : <><DollarSign size={20} /> Authorize Payment</>}</button></div>
+                            <div className="pt-4 flex gap-3">
+                                <button type="button" onClick={() => setIsVendorPaymentModalOpen(false)} className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
+                                <button type="submit" disabled={isSubmitting} className="flex-[2] bg-slate-900 dark:bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-black/20 flex items-center justify-center gap-3">{isSubmitting ? 'Processing...' : <><DollarSign size={20} /> Authorize</>}</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -1575,9 +1631,12 @@ const EventDetailsPage = () => {
             {/* COMMITTEE MODAL */}
             {showCommitteeModal && (
                 <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800">
-                        <div className="bg-slate-50 dark:bg-slate-800/50 px-10 py-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center"><h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{editingCommitteeMember ? 'Edit Role' : 'New Member'}</h3><button onClick={() => setShowCommitteeModal(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={24} /></button></div>
-                        <form onSubmit={handleSaveCommittee} className="p-10 space-y-5">
+                    <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-md max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800">
+                        <div className="bg-slate-50 dark:bg-slate-800/50 px-10 py-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center flex-shrink-0">
+                            <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{editingCommitteeMember ? 'Edit Role' : 'New Member'}</h3>
+                            <button onClick={() => setShowCommitteeModal(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={24} /></button>
+                        </div>
+                        <form onSubmit={handleSaveCommittee} className="p-10 space-y-5 overflow-y-auto flex-1 custom-scrollbar">
                             {!editingCommitteeMember && (
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">First Name</label><input required type="text" className="w-full border border-slate-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white rounded-2xl px-6 py-4 outline-none font-black" value={committeeForm.first_name} onChange={e => setCommitteeForm({ ...committeeForm, first_name: e.target.value })} /></div>
@@ -1615,7 +1674,11 @@ const EventDetailsPage = () => {
                                         {committeeForm.committee_role === 'MEMBER' && "Standard member with view-only access to basic event information."}
                                     </p>
                                 </div>
-                            </div>                            <div className="pt-6"><button type="submit" disabled={isSubmitting} className="w-full bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-xl shadow-brand-500/30 flex items-center justify-center gap-3"><Shield size={20} /> Save Assignment</button></div>
+                            </div>
+                            <div className="pt-6 flex gap-3">
+                                <button type="button" onClick={() => setShowCommitteeModal(false)} className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
+                                <button type="submit" disabled={isSubmitting} className="flex-[2] bg-brand-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-xl shadow-brand-500/30 flex items-center justify-center gap-3">{isSubmitting ? 'Saving...' : <><Shield size={20} /> Save Assignment</>}</button>
+                            </div>
                         </form>
                     </div>
                 </div>

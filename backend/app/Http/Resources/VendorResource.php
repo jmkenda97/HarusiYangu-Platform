@@ -19,6 +19,7 @@ class VendorResource extends JsonResource
             'rating' => (float)$this->rating,
             'status' => $this->status,
             'services' => $this->whenLoaded('services'),
+            'documents' => $this->whenLoaded('documents'),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

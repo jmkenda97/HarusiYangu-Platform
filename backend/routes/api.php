@@ -58,6 +58,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/bookings/{bookingId}/invoice', [\App\Http\Controllers\Api\EventBookingController::class, 'getInvoice']);
         Route::put('/bookings/{bookingId}/quote', [\App\Http\Controllers\Api\EventBookingController::class, 'sendQuote']);
         Route::put('/bookings/{bookingId}/accept', [\App\Http\Controllers\Api\EventBookingController::class, 'acceptQuote']);
+        Route::delete('/bookings/{bookingId}', [\App\Http\Controllers\Api\EventBookingController::class, 'destroy']);
         Route::put('/bookings/{bookingId}/confirm-service', [\App\Http\Controllers\Api\EventBookingController::class, 'confirmServiceReceived']);
 
         // Financials & Transaction History

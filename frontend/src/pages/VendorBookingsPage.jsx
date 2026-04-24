@@ -293,7 +293,10 @@ const VendorBookingsPage = () => {
     const [transactions, setTransactions] = useState([]);
     const [txPage, setTxPage] = useState(1);
     const [txTotal, setTxTotal] = useState(0);
+    const [txSearch, setTxSearch] = useState('');
     const [txMonth, setTxMonth] = useState('');
+    const [txStartDate, setTxStartDate] = useState('');
+    const [txEndDate, setTxEndDate] = useState('');
     const [txService, setTxService] = useState('');
 
     const fetchTransactions = async () => {
@@ -301,7 +304,10 @@ const VendorBookingsPage = () => {
             const res = await api.get('/vendor/ledger', {
                 params: {
                     page: txPage,
+                    search: txSearch,
                     month: txMonth,
+                    start_date: txStartDate,
+                    end_date: txEndDate,
                     service_type: txService
                 }
             });
@@ -314,7 +320,17 @@ const VendorBookingsPage = () => {
         if (activeTab === 'transactions') {
             fetchTransactions();
         }
-    }, [activeTab, txPage, txMonth, txService]);
+    }, [activeTab, txPage, txMonth, txStartDate, txEndDate, txService]);
+
+    // Simple search debounce for Vendor Ledger
+    useEffect(() => {
+        if (activeTab === 'transactions') {
+            const delayDebounceFn = setTimeout(() => {
+                fetchTransactions();
+            }, 500);
+            return () => clearTimeout(delayDebounceFn);
+        }
+    }, [txSearch]);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);

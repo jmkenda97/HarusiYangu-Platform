@@ -172,9 +172,9 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                     </div>
                     <div className="flex-1 overflow-auto bg-slate-100 p-4 flex items-center justify-center">
                         {doc.mime_type?.includes('pdf') ? (
-                            <iframe src={doc.file_url_full || getDocumentViewUrl(doc.id)} title={doc.document_name} className="h-full w-full rounded-lg bg-white shadow-sm border-0" />
+                            <iframe src={doc.file_url_full} title={doc.document_name} className="h-full w-full rounded-lg bg-white shadow-sm border-0" />
                         ) : (
-                            <img src={doc.file_url_full || getDocumentViewUrl(doc.id)} alt={doc.document_name} className="max-h-full max-w-full rounded-lg shadow-lg object-contain" />
+                            <img src={doc.file_url_full} alt={doc.document_name} className="max-h-full max-w-full rounded-lg shadow-lg object-contain" />
                         )}
                     </div>
                 </div>
@@ -438,19 +438,31 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                                 <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1 rounded-full text-xs font-bold">Compliance Ready</span>
                             </div>
 
-                            {vendor.documents?.length > 0 && (
+                            {vendor.documents?.filter(d => d.verification_status === 'APPROVED').length > 0 && (
                                 <div className="mb-6">
                                     <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">General Vendor Documents</p>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {vendor.documents.map(doc => (
+                                        {vendor.documents.filter(d => d.verification_status === 'APPROVED').map(doc => (
                                             <div key={doc.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
-                                                <div>
-                                                    <p className="font-bold text-slate-900 dark:text-white">{doc.document_name}</p>
-                                                    <p className="text-xs text-slate-400 uppercase">{formatServiceType(doc.document_type)}</p>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400">
+                                                        <FileText size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-slate-900 dark:text-white">{doc.document_name}</p>
+                                                        <p className="text-[9px] text-slate-400 uppercase font-black tracking-tighter">{formatServiceType(doc.document_type)}</p>
+                                                    </div>
                                                 </div>
-                                                <button type="button" onClick={() => setPreviewDoc(doc)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                                                    <ExternalLink size={16} />
-                                                </button>
+                                                {['TIN_CERTIFICATE', 'BRELA_CERTIFICATE', 'BUSINESS_LICENSE', 'INSURANCE'].includes(doc.document_type) ? (
+                                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg border border-emerald-100 dark:border-emerald-800/50">
+                                                        <CheckCircle size={14} className="fill-emerald-500/20" />
+                                                        <span className="text-[10px] font-black uppercase tracking-tight">Verified</span>
+                                                    </div>
+                                                ) : (
+                                                    <button type="button" onClick={() => setPreviewDoc(doc)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                                                        <ExternalLink size={16} />
+                                                    </button>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -458,19 +470,31 @@ const VendorProfileModal = ({ vendor, onClose, userEvents }) => {
                             )}
 
                             <div className="space-y-6">
-                                {vendor.services?.filter(service => (service.documents?.length || 0) > 0).map(service => (
+                                {vendor.services?.filter(service => service.documents?.some(d => d.verification_status === 'APPROVED')).map(service => (
                                     <div key={service.id}>
                                         <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">{service.service_name}</p>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {service.documents.map(doc => (
+                                            {service.documents.filter(d => d.verification_status === 'APPROVED').map(doc => (
                                                 <div key={doc.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <p className="font-bold text-slate-900 dark:text-white">{doc.document_name}</p>
-                                                        <p className="text-xs text-slate-400 uppercase">{formatServiceType(doc.document_type)}</p>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400">
+                                                            <FileText size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-slate-900 dark:text-white">{doc.document_name}</p>
+                                                            <p className="text-[9px] text-slate-400 uppercase font-black tracking-tighter">{formatServiceType(doc.document_type)}</p>
+                                                        </div>
                                                     </div>
-                                                    <button type="button" onClick={() => setPreviewDoc(doc)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                                                        <ExternalLink size={16} />
-                                                    </button>
+                                                    {['TIN_CERTIFICATE', 'BRELA_CERTIFICATE', 'BUSINESS_LICENSE', 'INSURANCE'].includes(doc.document_type) ? (
+                                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg border border-emerald-100 dark:border-emerald-800/50">
+                                                            <CheckCircle size={14} className="fill-emerald-500/20" />
+                                                            <span className="text-[10px] font-black uppercase tracking-tight">Verified</span>
+                                                        </div>
+                                                    ) : (
+                                                        <button type="button" onClick={() => setPreviewDoc(doc)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                                                            <ExternalLink size={16} />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>

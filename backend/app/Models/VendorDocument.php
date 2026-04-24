@@ -42,6 +42,41 @@ class VendorDocument extends Model
         'reviewed_at' => 'datetime',
     ];
 
+    /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array
+     */
+    protected $appends = ['file_url_full'];
+
+    /**
+     * Get the full URL or Base64 data for the document.
+     * This is used for immediate browser display.
+     */
+    public function getFileUrlFullAttribute(): ?string
+    {
+        if (!$this->file_url) {
+            return null;
+        }
+
+        try {
+            // Clean up the path
+            $path = $this->file_url;
+            $path = preg_replace('/^\/?storage\//', '', $path);
+
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
+                $fileContent = \Illuminate\Support\Facades\Storage::disk('public')->get($path);
+                $base64 = base64_encode($fileContent);
+                return 'data:' . ($this->mime_type ?? 'image/png') . ';base64,' . $base64;
+            }
+        } catch (\Exception $e) {
+            // Fallback to basic URL if base64 fails
+            return \Illuminate\Support\Facades\Storage::disk('public')->url($this->file_url);
+        }
+
+        return null;
+    }
+
     // --- RELATIONSHIPS ---
 
     public function vendor(): BelongsTo

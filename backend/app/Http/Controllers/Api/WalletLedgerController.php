@@ -30,33 +30,29 @@ class WalletLedgerController extends Controller
         $query = WalletLedgerEntry::where('event_id', $eventId)->with(['creator']);
 
         // --- ADVANCED FILTERS BROO ---
-        
+
         // 1. Search by Description
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $query->where('description', 'like', '%' . $request->search . '%');
         }
 
         // 2. Filter by Entry Type (CREDIT/DEBIT)
-        if ($request->has('type')) {
+        if ($request->filled('type')) {
             $query->where('entry_type', $request->type);
         }
 
         // 3. Filter by Month/Year (e.g. 2026-04)
-        if ($request->has('month')) {
+        if ($request->filled('month')) {
             $query->whereMonth('entry_date', substr($request->month, 5, 2))
                   ->whereYear('entry_date', substr($request->month, 0, 4));
         }
 
-        // 4. Filter by specific Week
-        if ($request->has('week')) {
-            $query->whereBetween('entry_date', [
-                now()->startOfWeek()->addWeeks($request->week - 1), 
-                now()->endOfWeek()->addWeeks($request->week - 1)
-            ]);
+        // 4. Professional Date Range Filter (Between Date X and Date Y)
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('entry_date', [$request->start_date, $request->end_date]);
         }
 
-        $ledger = $query->orderBy('entry_date', 'desc')
-            ->paginate($request->get('per_page', 15));
+        $ledger = $query->orderBy('entry_date', 'desc')            ->paginate($request->get('per_page', 15));
 
         return $this->paginatedResponse($ledger, \App\Http\Resources\WalletLedgerResource::class, 'Transaction history fetched successfully');
     }
@@ -78,14 +74,33 @@ class WalletLedgerController extends Controller
             })
             ->with(['creator', 'vendorPayment', 'vendorPayment.event']);
 
-        // Filter by Month
-        if ($request->has('month')) {
+        // --- ADVANCED VENDOR FILTERS BROO ---
+
+        // 1. Search by Description or Reference
+        if ($request->filled('search')) {
+            $searchTerm = '%' . $request->search . '%';
+            
+            $query->where(function($q) use ($searchTerm) {
+                $q->where('description', 'like', $searchTerm)
+                  ->orWhereHas('vendorPayment', function($pq) use ($searchTerm) {
+                      $pq->where('transaction_reference', 'like', $searchTerm);
+                  });
+            });
+        }
+
+        // 2. Filter by Month
+        if ($request->filled('month')) {
             $query->whereMonth('entry_date', substr($request->month, 5, 2))
                   ->whereYear('entry_date', substr($request->month, 0, 4));
         }
 
-        // Filter by Service Type (Searching through the Payment -> Booking)
-        if ($request->has('service_type')) {
+        // 3. Professional Date Range Filter
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('entry_date', [$request->start_date, $request->end_date]);
+        }
+
+        // 4. Filter by Service Type
+        if ($request->filled('service_type')) {
             $query->whereHas('vendorPayment.booking', function($q) use ($request) {
                 $q->where('assigned_service', 'like', '%' . $request->service_type . '%');
             });

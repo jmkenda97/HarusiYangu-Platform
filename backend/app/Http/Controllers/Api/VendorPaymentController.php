@@ -67,7 +67,7 @@ class VendorPaymentController extends Controller
             'milestone' => 'required|string|in:DEPOSIT,INTERIM,FINAL,CUSTOM',
             'payment_method' => 'required|string',
             'transaction_reference' => 'nullable|string',
-            'proof_attachment' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'proof_attachment' => 'nullable|file|mimetypes:image/jpeg,image/png,image/jpg,image/webp,application/pdf|max:10240',
             'notes' => 'nullable|string',
             'metadata' => 'nullable|array'
         ]);

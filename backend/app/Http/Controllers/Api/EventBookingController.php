@@ -246,6 +246,7 @@ class EventBookingController extends Controller
      */
     public function confirmServiceReceived($bookingId)
     {
+        // ... (existing code remains identical)
         $booking = EventVendor::with(['event', 'vendor', 'vendor.user'])->findOrFail($bookingId);
 
         if (auth()->id() !== $booking->event->owner_user_id) {
@@ -306,6 +307,45 @@ class EventBookingController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => 'Confirmation failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Cancel an inquiry or quoted booking (Host side)
+     */
+    public function destroy($id)
+    {
+        $booking = EventVendor::with(['event', 'vendor', 'vendor.user'])->findOrFail($id);
+
+        // Security check
+        if ($booking->event->owner_user_id !== auth()->id()) {
+            return $this->errorResponse('Unauthorized.', [], 403);
+        }
+
+        // Only allow if not yet accepted/paid
+        if (!in_array($booking->status, ['INQUIRY', 'QUOTED'])) {
+            return $this->errorResponse('Cannot delete an accepted or completed booking.', [], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Update status to CANCELLED instead of hard deleting to preserve logs
+            $booking->update(['status' => 'CANCELLED']);
+
+            // Notify Vendor
+            NotificationService::notify(
+                $booking->vendor->user,
+                "Inquiry Cancelled",
+                "The host of " . $booking->event->event_name . " has cancelled their inquiry/request for " . $booking->assigned_service . ".",
+                ['icon' => 'XCircle', 'event_id' => $booking->event_id],
+                auth()->user()
+            );
+
+            DB::commit();
+            return $this->successResponse('Booking cancelled successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->errorResponse('Failed to cancel booking: ' . $e->getMessage(), [], 500);
         }
     }
 }

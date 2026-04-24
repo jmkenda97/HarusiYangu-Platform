@@ -34,14 +34,19 @@ class VendorInquiryController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
 
-        // Check if already inquired
+        // Check if already inquired FOR THIS SPECIFIC BUDGET ITEM
+        // We only block if there is an active (not cancelled/rejected) inquiry for the same budget item
         $exists = EventVendor::where('event_id', $eventId)
             ->where('vendor_id', $request->vendor_id)
+            ->where('budget_item_id', $request->budget_item_id)
             ->whereIn('status', ['INQUIRY', 'QUOTED', 'ACCEPTED'])
             ->exists();
 
         if ($exists) {
-            return response()->json(['success' => false, 'message' => 'You already have an active inquiry or booking with this vendor.'], 422);
+            return response()->json([
+                'success' => false, 
+                'message' => 'You already have an active inquiry or booking with this vendor for this specific budget item.'
+            ], 422);
         }
 
         try {

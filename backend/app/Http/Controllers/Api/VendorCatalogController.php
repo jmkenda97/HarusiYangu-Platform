@@ -17,7 +17,9 @@ class VendorCatalogController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Vendor::with(['services' => function ($q) {
+        $query = Vendor::with(['documents' => function ($q) {
+            $q->where('verification_status', 'APPROVED');
+        }, 'services' => function ($q) {
             $q->where('is_available', true)
               ->where('is_verified', true)
               ->with(['documents' => function ($docQuery) {
@@ -98,6 +100,6 @@ class VendorCatalogController extends Controller
             }
         ])->where('status', 'ACTIVE')->findOrFail($id);
 
-        return $this->successResponse('Vendor fetched successfully', $vendor);
+        return $this->successResponse('Vendor fetched successfully', new \App\Http\Resources\VendorResource($vendor));
     }
 }
