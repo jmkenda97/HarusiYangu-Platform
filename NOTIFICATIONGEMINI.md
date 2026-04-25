@@ -60,7 +60,24 @@ NotificationService::notify(
 );
 ```
 
-## 4. Message Logging
+## 4. Milestone Payment & Reminder Intelligence (30/30/40 Rule)
+To ensure professional financial flow, the system uses "Time + Action" triggers:
+
+*   **Milestone 1 (30% Deposit):** Triggered immediately upon "Accept Quote".
+*   **Milestone 2 (30% Interim):** Automated reminder sent 30 days before the Event Date.
+*   **Milestone 3 (40% Final):** Automated reminder sent 1 day after the Event Date to "Confirm Service Received" and release escrow.
+
+### Tracking & Progress:
+The system compares `amount_paid` against the `agreed_amount` to dynamically update the contract status:
+*   `< 30%`: Deposit Pending.
+*   `< 60%`: Interim Pending.
+*   `< 100%`: Final Payment Pending.
+
+### Role-Based Actions:
+*   **Treasurer/Host:** Authorized to record and trigger payments.
+*   **Vendor:** Polite "Request Payment" button available if milestone date has passed.
+
+## 5. Message Logging
 *   All notifications are logged in the `message_logs` table.
 *   This serves as a "Sent Folder" for auditing and future SMS/WhatsApp integration.
 *   Emails are triggered via SMTP settings in `.env`.
