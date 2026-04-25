@@ -240,15 +240,15 @@ const LandingPage = () => {
                 dataPayload.append('business_name', formData.business_name);
                 dataPayload.append('service_type', formData.service_type);
                 dataPayload.append('address', formData.address || '');
-                
+
                 const minP = parseFloat(formData.min_price);
                 dataPayload.append('min_price', isNaN(minP) ? 0 : minP);
-                
+
                 if (formData.max_price) {
                     const maxP = parseFloat(formData.max_price);
                     if (!isNaN(maxP)) dataPayload.append('max_price', maxP);
                 }
-                
+
                 // REQUIRED DOCUMENTS
                 if (files.business_license) dataPayload.append('business_license', files.business_license);
                 if (files.brela_certificate) dataPayload.append('brela_certificate', files.brela_certificate);
@@ -306,7 +306,7 @@ const LandingPage = () => {
                     <div className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-600">
                         <a href="#features" className="hover:text-blue-900 transition-colors">Features</a>
                         <a href="#celebrations" className="hover:text-blue-900 transition-colors">Events</a>
-                        <a href="#how-it-works" className="hover:text-blue-900 transition-colors">How It Works</a>
+                        <a href="#how-it-works" className="hover:text-blue-900 transition-colors">How It Works?????</a>
                     </div>
                     <div className="hidden md:flex items-center gap-4">
                         <button onClick={() => handleOpenAuth('login')} className="text-slate-900 font-semibold hover:text-blue-700 text-sm">Log In</button>
@@ -535,15 +535,15 @@ const LandingPage = () => {
                                             <h4 className="text-2xl font-bold text-slate-900">Complete Your Profile</h4>
                                             <p className="text-slate-500 text-sm mt-1">Provide your details to set up your account.</p>
                                         </div>
-                                        
+
                                         <form onSubmit={handleCompleteProfile} className="space-y-8">
-                                            
+
                                             {/* --- SECTION: PERSONAL INFORMATION --- */}
                                             <div className="space-y-4">
                                                 <div className="flex items-center gap-2 text-blue-900 font-bold text-sm border-b border-slate-100 pb-2">
                                                     <User size={16} /> Personal Information
                                                 </div>
-                                                
+
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                     <div>
                                                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">First Name</label>
@@ -579,7 +579,7 @@ const LandingPage = () => {
                                                                 <div className="h-11 w-11 rounded-full bg-slate-100 flex items-center justify-center border-2 border-dashed border-slate-200 text-slate-400"><Image size={18} /></div>
                                                             )}
                                                             <label className="text-xs text-blue-900 font-bold cursor-pointer hover:bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 transition-colors">
-                                                                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} /> 
+                                                                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                                                                 {imagePreview ? 'Change Photo' : 'Upload Photo'}
                                                             </label>
                                                         </div>
@@ -624,24 +624,24 @@ const LandingPage = () => {
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div>
                                                                 <label className="block text-[10px] font-bold text-blue-700 uppercase mb-1.5 ml-1">Minimum Price (TZS)</label>
-                                                                <input 
-                                                                    type="number" 
-                                                                    value={formData.min_price || ''} 
-                                                                    onChange={(e) => setFormData({ ...formData, min_price: e.target.value })} 
-                                                                    className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white shadow-sm" 
-                                                                    placeholder="000,000" 
+                                                                <input
+                                                                    type="number"
+                                                                    value={formData.min_price || ''}
+                                                                    onChange={(e) => setFormData({ ...formData, min_price: e.target.value })}
+                                                                    className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white shadow-sm"
+                                                                    placeholder="000,000"
                                                                     min="0"
-                                                                    required 
+                                                                    required
                                                                 />
                                                             </div>
                                                             <div>
                                                                 <label className="block text-[10px] font-bold text-blue-700 uppercase mb-1.5 ml-1">Maximum Price (TZS)</label>
-                                                                <input 
-                                                                    type="number" 
-                                                                    value={formData.max_price || ''} 
-                                                                    onChange={(e) => setFormData({ ...formData, max_price: e.target.value })} 
-                                                                    className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white shadow-sm" 
-                                                                    placeholder="0,000,000" 
+                                                                <input
+                                                                    type="number"
+                                                                    value={formData.max_price || ''}
+                                                                    onChange={(e) => setFormData({ ...formData, max_price: e.target.value })}
+                                                                    className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-900 outline-none text-sm bg-white shadow-sm"
+                                                                    placeholder="0,000,000"
                                                                     min="0"
                                                                 />
                                                             </div>
