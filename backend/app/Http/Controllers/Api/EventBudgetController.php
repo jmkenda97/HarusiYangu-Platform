@@ -47,12 +47,9 @@ class EventBudgetController extends Controller
         }
 
         // Also fetch categories for the form
-        $categories = BudgetCategory::all();
+        // $categories = BudgetCategory::all(); // Removed as per Spec 10.1 (separate endpoint)
 
-        return $this->successResponse('Budget items fetched successfully', [
-            'items' => $items,
-            'categories' => $categories
-        ]);
+        return $this->successResponse('Budget items fetched successfully', $items);
     }
 
     public function store(Request $request, $eventId)

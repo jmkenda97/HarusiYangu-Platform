@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import api from '../api/axios';
 import {
     ArrowLeft, Users, Wallet, CreditCard, Plus, ChevronLeft, ChevronRight, CheckCircle, Clock,
@@ -16,6 +17,7 @@ const EventDetailsPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState('overview');
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -269,7 +271,7 @@ const EventDetailsPage = () => {
 
     const fetchLedger = async () => {
         try {
-            const res = await api.get(`/events/${id}/ledger`, {
+            const res = await api.get(`/events/${id}/wallet/ledger`, {
                 params: {
                     page: ledgerPage,
                     search: ledgerSearch,
@@ -277,8 +279,9 @@ const EventDetailsPage = () => {
                     type: ledgerType
                 }
             });
-            setLedger(res.data.data);
-            setLedgerTotal(res.data.meta.total);
+            // Handle paginated response: data contains the items, meta contains pagination
+            setLedger(res.data.data || []);
+            setLedgerTotal(res.data.meta?.total || 0);
         } catch (err) { console.error("Ledger fetch error", err); }
     };
 
@@ -309,12 +312,18 @@ const EventDetailsPage = () => {
             try {
                 if (activeTab === 'overview') {
                     if (canAccess('view-event-guests')) await fetchGuests();
-                    if (canAccess('view-event-budget')) await fetchBudget();
+                    if (canAccess('view-event-budget')) {
+                        await fetchCategories();
+                        await fetchBudget();
+                    }
                     if (canAccess('manage-event-vendors')) await fetchVendors();
                 } else if (activeTab === 'guests') {
                     if (canAccess('view-event-guests')) await fetchGuests();
                 } else if (activeTab === 'budget') {
-                    if (canAccess('view-event-budget')) await fetchBudget();
+                    if (canAccess('view-event-budget')) {
+                        await fetchCategories();
+                        await fetchBudget();
+                    }
                 } else if (activeTab === 'committee') {
                     if (canAccess('manage-event-committee')) await fetchCommittee();
                 } else if (activeTab === 'vendors') {
@@ -372,20 +381,29 @@ const EventDetailsPage = () => {
         }
     };
 
+    const fetchCategories = async () => {
+        try {
+            const res = await api.get('/budget-categories');
+            setCategories(res.data.data || []);
+        } catch (err) { console.error("Failed to load categories", err); }
+    };
+
     const fetchBudget = async () => {
         try {
-            const res = await api.get(`/events/${id}/budget`);
-            setBudgetItems(res.data.data.items);
-            setCategories(res.data.data.categories);
+            const res = await api.get(`/events/${id}/budget-items`);
+            setBudgetItems(res.data.data || []);
             setBudgetPage(1);
         } catch (err) { console.error(err); }
     };
 
     const handleStatusChange = async (itemId, newStatus) => {
         try {
-            await api.put(`/events/${id}/budget/${itemId}`, { budget_item_status: newStatus });
+            await api.put(`/events/${id}/budget-items/${itemId}`, { budget_item_status: newStatus });
             setBudgetItems(prev => prev.map(item => item.id === itemId ? { ...item, budget_item_status: newStatus } : item));
-        } catch (err) { alert("Failed to update status"); }
+            showToast('Status updated successfully.', 'success');
+        } catch (err) { 
+            showToast('Failed to update status.', 'error');
+        }
     };
 
     const handleSaveBudget = async (e) => {
@@ -394,15 +412,19 @@ const EventDetailsPage = () => {
         setIsSubmitting(true);
         try {
             if (editingBudgetItem) {
-                await api.put(`/events/${id}/budget/${editingBudgetItem.id}`, budgetForm);
+                await api.put(`/events/${id}/budget-items/${editingBudgetItem.id}`, budgetForm);
+                showToast('Budget item updated successfully!', 'success');
             } else {
-                await api.post(`/events/${id}/budget`, budgetForm);
+                await api.post(`/events/${id}/budget-items`, budgetForm);
+                showToast('Budget item added successfully!', 'success');
             }
             setShowBudgetModal(false);
             setBudgetForm({ category_id: '', item_name: '', estimated_cost: '', description: '' });
             setEditingBudgetItem(null);
             fetchBudget();
-        } catch (err) { alert(err.response?.data?.message || "Failed to save budget item"); }
+        } catch (err) { 
+            showToast(err.response?.data?.message || "Failed to save budget item", 'error'); 
+        }
         finally { setIsSubmitting(false); }
     };
 
@@ -416,9 +438,15 @@ const EventDetailsPage = () => {
     };
 
     const handleDeleteBudget = async (itemId) => {
-        if (!confirm("Delete this budget item?")) return;
-        try { await api.delete(`/events/${id}/budget/${itemId}`); fetchBudget(); }
-        catch (err) { alert("Failed to delete item"); }
+        if (!confirm("Are you sure you want to delete this budget item?")) return;
+        setIsSubmitting(true);
+        try { 
+            await api.delete(`/events/${id}/budget-items/${itemId}`); 
+            fetchBudget(); 
+            showToast('Budget item deleted.', 'success');
+        } catch (err) { 
+            showToast('Failed to delete item.', 'error'); 
+        } finally { setIsSubmitting(false); }
     };
 
     const fetchGuests = async () => {
@@ -436,14 +464,19 @@ const EventDetailsPage = () => {
         try {
             if (editingGuest) {
                 await api.put(`/events/${id}/contacts/${editingGuest.id}`, guestForm);
+                showToast('Guest profile updated successfully.', 'success');
             } else {
                 await api.post(`/events/${id}/contacts`, guestForm);
+                showToast('Guest added to the list.', 'success');
             }
             setShowGuestModal(false);
             setGuestForm({ full_name: '', phone: '', email: '', relationship_label: '', is_vip: false });
             setEditingGuest(null);
             fetchGuests();
-        } catch (err) { alert(err.response?.data?.message || "Failed to save guest"); }
+        } catch (err) { 
+            const msg = err.response?.data?.message || "Failed to save guest";
+            showToast(msg, 'error'); 
+        }
         finally { setIsSubmitting(false); }
     };
 
@@ -457,15 +490,21 @@ const EventDetailsPage = () => {
     };
 
     const handleDeleteGuest = async (guestId) => {
-        if (!confirm("Are you sure?")) return;
-        try { await api.delete(`/events/${id}/contacts/${guestId}`); fetchGuests(); }
-        catch (err) { alert(err.response?.data?.message || "Failed to delete guest"); }
+        if (!confirm("Are you sure you want to remove this contact?")) return;
+        setIsSubmitting(true);
+        try { 
+            await api.delete(`/events/${id}/contacts/${guestId}`); 
+            fetchGuests(); 
+            showToast('Contact removed successfully.', 'success');
+        } catch (err) { 
+            showToast(err.response?.data?.message || "Failed to delete guest", 'error'); 
+        } finally { setIsSubmitting(false); }
     };
 
     const fetchCommittee = async () => {
         try {
             const res = await api.get(`/events/${id}/committee-members`);
-            setCommittee(res.data.data);
+            setCommittee(res.data.data || []);
             setCommitteePage(1);
         } catch (err) {
             console.error("Committee fetch error", err);
@@ -487,18 +526,18 @@ const EventDetailsPage = () => {
         setIsSubmitting(true);
         try {
             if (editingCommitteeMember) {
-                await api.put(`/events/${id}/committee/${editingCommitteeMember.id}`, committeeForm);
-                setCommitteeResult({ type: 'success', message: "Committee member role updated successfully!" });
+                await api.put(`/events/${id}/committee-members/${editingCommitteeMember.id}`, committeeForm);
+                showToast('Committee member role updated!', 'success');
             } else {
-                await api.post(`/events/${id}/committee`, committeeForm);
-                setCommitteeResult({ type: 'success', message: "Committee member added successfully!" });
+                await api.post(`/events/${id}/committee-members`, committeeForm);
+                showToast('Member added to committee!', 'success');
             }
             setShowCommitteeModal(false);
             setCommitteeForm({ first_name: '', last_name: '', phone: '', committee_role: 'MEMBER' });
             setEditingCommitteeMember(null);
             fetchCommittee();
         } catch (err) {
-            setCommitteeResult({ type: 'error', message: err.response?.data?.message || "Failed to save committee member" });
+            showToast(err.response?.data?.message || "Failed to save committee member", 'error');
         }
         finally { setIsSubmitting(false); }
     };
@@ -516,14 +555,15 @@ const EventDetailsPage = () => {
 
     const handleDeleteCommittee = async (memberId) => {
         if (!confirm("Are you sure you want to remove this member from the committee?")) return;
+        setIsSubmitting(true);
         try {
-            await api.delete(`/events/${id}/committee/${memberId}`);
+            await api.delete(`/events/${id}/committee-members/${memberId}`);
             fetchCommittee();
-            setCommitteeResult({ type: 'success', message: "Member removed from committee successfully." });
+            showToast('Member removed from committee.', 'success');
         }
         catch (err) {
-            setCommitteeResult({ type: 'error', message: "Failed to remove member" });
-        }
+            showToast('Failed to remove member.', 'error');
+        } finally { setIsSubmitting(false); }
     };
 
     const handleDownloadTemplate = () => {
@@ -532,7 +572,7 @@ const EventDetailsPage = () => {
 
     const handleImport = async (e) => {
         e.preventDefault();
-        if (!importFile) { alert("Please select a file first."); return; }
+        if (!importFile) { showToast("Please select a file first.", "warning"); return; }
         if (importing) return;
         setImporting(true);
         setImportResult(null);
@@ -542,8 +582,14 @@ const EventDetailsPage = () => {
             const res = await api.post(`/events/${id}/contacts/import`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             const data = res.data.data;
             setImportResult({ message: `Success: ${data.imported} guests added. Skipped: ${data.skipped}.`, errors: data.errors || [] });
-            if (data.imported > 0) { fetchGuests(); setImportFile(null); }
-        } catch (err) { alert("Import failed: " + (err.response?.data?.message || err.message)); }
+            if (data.imported > 0) { 
+                fetchGuests(); 
+                setImportFile(null); 
+                showToast(`Successfully imported ${data.imported} guests.`, 'success');
+            }
+        } catch (err) { 
+            showToast(err.response?.data?.message || "Import failed", 'error'); 
+        }
         finally { setImporting(false); }
     };
 
@@ -567,8 +613,11 @@ const EventDetailsPage = () => {
             setShowContributorModal(false);
             setContributorForm({ contact_id: null, full_name: '', phone: '', email: '', pledge_amount: '', is_vip: false, isConversion: false });
             fetchEventDetails();
+            showToast('Pledge recorded successfully!', 'success');
             if (activeTab === 'guests') fetchGuests();
-        } catch (err) { alert(err.response?.data?.message || "Failed to add contributor"); }
+        } catch (err) { 
+            showToast(err.response?.data?.message || "Failed to add contributor", 'error'); 
+        }
         finally { setIsSubmitting(false); }
     };
 
@@ -586,7 +635,10 @@ const EventDetailsPage = () => {
             await api.post(`/events/${id}/payments`, paymentForm);
             setShowPaymentModal(false);
             fetchEventDetails();
-        } catch (err) { alert("Payment Failed: " + (err.response?.data?.message || err.message)); }
+            showToast('Payment verified and recorded.', 'success');
+        } catch (err) { 
+            showToast(err.response?.data?.message || "Payment recording failed", 'error'); 
+        }
         finally { setIsSubmitting(false); }
     };
 
@@ -990,38 +1042,44 @@ const EventDetailsPage = () => {
                                         <tr><th className="px-6 py-4 w-12 text-center">#</th><th className="px-6 py-4">Guest Info</th><th className="px-6 py-4">Contact</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Actions</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                        {isTabLoading ? <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">Loading data...</td></tr> : displayedGuests.length === 0 ? <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No guests found.</td></tr> : displayedGuests.map((guest, index) => (
-                                            <tr key={guest.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
-                                                <td className="px-6 py-4 text-center text-slate-300 font-mono text-xs">{(guestPage - 1) * itemsPerPage + index + 1}</td>
-                                                <td className="px-6 py-4">
-                                                    <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                                        {guest.full_name}
-                                                        {guest.is_vip && <Crown size={14} className="text-yellow-500 fill-yellow-500" />}
-                                                    </div>
-                                                    {guest.relationship_label && <div className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter mt-0.5">{guest.relationship_label}</div>}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col gap-0.5">
-                                                        {guest.phone && <span className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400"><Phone size={12} className="text-brand-500" />{guest.phone}</span>}
-                                                        {guest.email && <span className="flex items-center gap-1.5 text-[11px] text-slate-400"><Mail size={12} />{guest.email}</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {guest.pledge ? (
-                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800 shadow-sm"><CheckCircle size={10} /> Contributor</span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">Guest</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        {!guest.pledge && <button onClick={() => openPledgeFromGuest(guest)} className="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-brand-700 transition-all shadow-sm flex items-center gap-1"><DollarSign size={12} /> Pledge</button>}
-                                                        <button onClick={() => handleEditGuest(guest)} className="p-2 text-slate-400 hover:text-brand-600 transition-colors"><Edit size={16} /></button>
-                                                        <button onClick={() => handleDeleteGuest(guest.id)} className="p-2 text-slate-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {isTabLoading ? (
+                                            <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">Loading data...</td></tr>
+                                        ) : displayedGuests.length === 0 ? (
+                                            <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No guests found.</td></tr>
+                                        ) : (
+                                            displayedGuests.map((guest, index) => (
+                                                <tr key={guest.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+                                                    <td className="px-6 py-4 text-center text-slate-300 font-mono text-xs">{(guestPage - 1) * itemsPerPage + index + 1}</td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                                            {guest.full_name}
+                                                            {guest.is_vip && <Crown size={14} className="text-yellow-500 fill-yellow-500" />}
+                                                        </div>
+                                                        {guest.relationship_label && <div className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter mt-0.5">{guest.relationship_label}</div>}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex flex-col gap-0.5">
+                                                            {guest.phone && <span className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400"><Phone size={12} className="text-brand-500" />{guest.phone}</span>}
+                                                            {guest.email && <span className="flex items-center gap-1.5 text-[11px] text-slate-400"><Mail size={12} />{guest.email}</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {guest.pledge ? (
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800 shadow-sm"><CheckCircle size={10} /> Contributor</span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">Guest</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            {!guest.pledge && <button onClick={() => openPledgeFromGuest(guest)} className="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-brand-700 transition-all shadow-sm flex items-center gap-1"><DollarSign size={12} /> Pledge</button>}
+                                                            <button onClick={() => handleEditGuest(guest)} className="p-2 text-slate-400 hover:text-brand-600 transition-colors"><Edit size={16} /></button>
+                                                            <button onClick={() => handleDeleteGuest(guest.id)} className="p-2 text-slate-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                 </table>
                             </div>

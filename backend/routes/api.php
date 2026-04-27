@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\EventContributorController;
 use App\Http\Controllers\Api\EventPaymentController;
 use App\Http\Controllers\Api\EventContactController;
+use App\Http\Controllers\Api\BudgetCategoryController;
 use App\Http\Controllers\Api\EventBudgetController;
 use App\Http\Controllers\Api\AdminVendorController;
 use App\Http\Controllers\Api\VendorCatalogController;
@@ -17,8 +18,7 @@ use App\Http\Controllers\Api\VendorDocumentController;
 use App\Http\Controllers\Api\VendorInquiryController;
 use App\Http\Controllers\Api\WalletLedgerController;
 use App\Http\Controllers\Api\VendorPayoutAccountController;
-// CORRECTED IMPORT: NO 'Api\' BECAUSE CONTROLLER IS IN app/Http/Controllers
-use App\Http\Controllers\EventCommitteeController;
+use App\Http\Controllers\Api\EventCommitteeController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Route;
 // Version 1 API Group
 Route::prefix('v1')->group(function () {
 
-    // AUTHENTICATION ROUTES
+    // AUTHENTICATION MODULE (Spec Section 2)
     Route::prefix('auth')->group(function () {
         Route::post('/request-otp', [AuthController::class, 'requestOtp']);
         Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -34,11 +34,14 @@ Route::prefix('v1')->group(function () {
         Route::post('/verify-register-otp', [AuthController::class, 'verifyRegistrationOtp']);
         Route::post('/complete-registration', [AuthController::class, 'completeRegistration']);
         Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+        
+        // 2.5 Get Current User (Strict Spec)
+        Route::get('/me', [UserController::class, 'me'])->middleware('auth:sanctum');
     });
 
-    // USER MANAGEMENT ROUTES
+    // USER MANAGEMENT ROUTES (Spec Section 3)
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/users/me', [UserController::class, 'me']);
+        // 3.1 Update Profile
         Route::put('/users/profile', [UserController::class, 'updateProfile']);
 
         // Notifications
@@ -61,8 +64,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('/bookings/{bookingId}', [\App\Http\Controllers\Api\EventBookingController::class, 'destroy']);
         Route::put('/bookings/{bookingId}/confirm-service', [\App\Http\Controllers\Api\EventBookingController::class, 'confirmServiceReceived']);
 
-        // Financials & Transaction History
-        Route::get('/events/{eventId}/ledger', [WalletLedgerController::class, 'index']);
+        // VENDOR FINANCIALS
         Route::get('/vendor/ledger', [WalletLedgerController::class, 'vendorIndex']);
         Route::get('/bookings/{bookingId}/payments', [\App\Http\Controllers\Api\VendorPaymentController::class, 'getPaymentInfo']);
         Route::post('/bookings/{bookingId}/payments', [\App\Http\Controllers\Api\VendorPaymentController::class, 'store']);
@@ -80,13 +82,16 @@ Route::prefix('v1')->group(function () {
     // ==========================================
     Route::middleware('auth:sanctum')->group(function () {
 
-        // Event CRUD
+        Route::get('/budget-categories', [BudgetCategoryController::class, 'index']);
+
+        // Event CRUD (Spec Section 4)
         Route::apiResource('events', EventController::class);
 
-        // Nested Routes for Contributors, Payments, Contacts, Budget, and Committee
-        // URL Pattern: /api/v1/events/{event_id}/...
+        // Nested Routes (Spec Sections 5, 9, 10)
         Route::prefix('events/{eventId}')->group(function () {
-            Route::get('/ledger', [WalletLedgerController::class, 'index']);
+            
+            // 9.2 Wallet Ledger (Strict Spec)
+            Route::get('/wallet/ledger', [WalletLedgerController::class, 'index']);
 
             // --- COMMITTEE ROUTES ---
             Route::get('/committee-members', [EventCommitteeController::class, 'index']);
@@ -108,16 +113,16 @@ Route::prefix('v1')->group(function () {
             Route::get('/contacts/template', [EventContactController::class, 'downloadTemplate']);
             Route::get('/contacts/export', [EventContactController::class, 'export']);
             Route::post('/contacts/import', [EventContactController::class, 'import']);
-            // Corrected typo in coords -> contacts
             Route::get('/contributors/export', [EventContributorController::class, 'export']);
             Route::get('/budget/export', [EventBudgetController::class, 'export']);
 
-            // Budget Management
-            Route::apiResource('budget', EventBudgetController::class)->only(['index', 'store', 'update', 'destroy']);
+            // 10. BUDGET MODULE (Strict Spec)
+            Route::get('/budget-items', [EventBudgetController::class, 'index']);
+            Route::post('/budget-items', [EventBudgetController::class, 'store']);
+            Route::put('/budget-items/{budget_item_id}', [EventBudgetController::class, 'update']);
+            Route::delete('/budget-items/{budget_item_id}', [EventBudgetController::class, 'destroy']);
 
-            // ==========================================
-            // VENDOR ASSIGNMENT ROUTES (Task #4)
-            // ==========================================
+            // VENDOR ASSIGNMENT
             Route::get('/vendors', [EventVendorController::class, 'index']);
             Route::post('/vendors', [EventVendorController::class, 'store']);
             Route::put('/vendors/{id}', [EventVendorController::class, 'update']);
@@ -125,30 +130,27 @@ Route::prefix('v1')->group(function () {
         });
 
         // ==========================================
-        // VENDOR ROUTES (Catalog & Self-Management)
+        // VENDOR ROUTES
         // ==========================================
         Route::prefix('vendors')->group(function () {
-            // 1. Specific Private Routes (Must be above {id} to avoid collision)
             Route::get('/dashboard', [VendorController::class, 'getDashboard']);
             Route::get('/profile', [VendorController::class, 'getProfile']);
             Route::post('/profile', [VendorController::class, 'createProfile']);
             Route::put('/profile', [VendorController::class, 'updateProfile']);
 
-            // 2. Services Management
             Route::get('/services', [VendorServiceController::class, 'index']);
             Route::post('/services', [VendorServiceController::class, 'store']);
             Route::put('/services/{id}', [VendorServiceController::class, 'update']);
             Route::delete('/services/{id}', [VendorServiceController::class, 'destroy']);
             Route::put('/services/{id}/review', [VendorServiceController::class, 'adminReview']);
 
-            // 3. Documents Management
             Route::get('/documents', [VendorDocumentController::class, 'index']);
             Route::post('/documents', [VendorDocumentController::class, 'store']);
             Route::put('/documents/{id}', [VendorDocumentController::class, 'update']);
             Route::delete('/documents/{id}', [VendorDocumentController::class, 'destroy']);
             Route::get('/documents/{id}/view', [VendorDocumentController::class, 'serveFile']);
 
-            // 4. Catalog Public Routes (Must be at the bottom)
+            // Public Catalog
             Route::get('/', [VendorCatalogController::class, 'index']);
             Route::get('/{id}', [VendorCatalogController::class, 'show']);
         });
@@ -172,5 +174,5 @@ Route::prefix('v1')->group(function () {
     });
 });
 
-// PUBLIC DOCUMENT VIEW - NO AUTH REQUIRED
+// PUBLIC DOCUMENT VIEW
 Route::get('/api/v1/vendors/documents/{id}/view', [VendorDocumentController::class, 'serveFile']);

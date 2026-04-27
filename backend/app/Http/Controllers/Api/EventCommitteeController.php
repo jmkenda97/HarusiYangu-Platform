@@ -1,7 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+declare(strict_types=1);
 
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\EventCommitteeMember;
 use App\Models\User;
@@ -11,13 +14,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use App\Services\NotificationService;
+use App\Http\Resources\CommitteeMemberResource;
+use App\Traits\ApiResponse;
+use Illuminate\Http\JsonResponse;
 
 class EventCommitteeController extends Controller
 {
+    use ApiResponse;
+
     /**
      * Helper to map committee roles to specific Spatie permissions.
      */
-    private function getPermissionsForRole($role)
+    private function getPermissionsForRole(string $role): array
     {
         $perms = [];
 
@@ -52,103 +60,130 @@ class EventCommitteeController extends Controller
         return $perms;
     }
 
-    public function index($eventId)
+    public function index(string $eventId): JsonResponse
     {
         $event = Event::findOrFail($eventId);
         $members = EventCommitteeMember::where('event_id', $eventId)
             ->with('user:id,first_name,last_name,phone,email,profile_photo_url')
             ->get();
 
-        return $this->successResponse('Committee members fetched successfully', $members);
+        return $this->successResponse('Committee members fetched successfully', CommitteeMemberResource::collection($members));
     }
 
-    public function store(Request $request, $eventId)
+    public function store(Request $request, string $eventId): JsonResponse
     {
         // 1. Validate Request
         $request->validate([
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
-            'phone' => 'required|string|unique:users,phone',
+            'phone' => 'required|string',
             'committee_role' => 'required|in:CHAIRPERSON,SECRETARY,TREASURER,COORDINATOR,MEMBER,GATE_OFFICER',
         ]);
 
-        // 2. Fetch Event for Authorization
         $event = Event::findOrFail($eventId);
-
-        // 3. CHECK PERMISSIONS
         $this->authorize('manageCommittee', $event);
 
-        return DB::transaction(function () use ($request, $eventId) {
-            // 4. Find or Create User
-            $user = User::firstOrCreate(
-                ['phone' => $request->phone],
-                [
+        try {
+            $member = DB::transaction(function () use ($request, $eventId, $event) {
+                $phone = preg_replace('/\D+/', '', (string) $request->phone);
+
+                // 4. Find or Create User (Handle Soft Deletes)
+                $user = User::withTrashed()->where('phone', $phone)->first();
+                
+                if (!$user) {
+                    $user = User::create([
+                        'id' => (string) Str::uuid(),
+                        'first_name' => $request->first_name,
+                        'last_name' => $request->last_name,
+                        'phone' => $phone,
+                        'role' => 'COMMITTEE_MEMBER',
+                        'status' => 'ACTIVE',
+                        'password_hash' => Hash::make('password123'),
+                        'is_phone_verified' => true,
+                        'onboarding_completed' => true,
+                    ]);
+                } else {
+                    if ($user->trashed()) {
+                        $user->restore();
+                    }
+                    $user->update([
+                        'first_name' => $request->first_name,
+                        'last_name' => $request->last_name,
+                        'status' => 'ACTIVE',
+                        'onboarding_completed' => true
+                    ]);
+                }
+
+                // 5. Assign Spatie Role Safely
+                if (!$user->hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'HOST'])) {
+                    $spatieRoleName = ($request->committee_role === 'GATE_OFFICER') ? 'GATE_OFFICER' : 'COMMITTEE_MEMBER';
+                    $roleExists = DB::table('roles')->where('name', $spatieRoleName)->exists();
+                    if ($roleExists && !$user->hasRole($spatieRoleName)) {
+                        $user->assignRole($spatieRoleName);
+                    }
+                }
+
+                // 6. Check for duplicates
+                $existing = EventCommitteeMember::where('event_id', $eventId)
+                    ->where('user_id', $user->id)
+                    ->first();
+
+                if ($existing) {
+                    throw new \Exception('This user is already a member of your committee.');
+                }
+
+                // 7. Define Role Flags
+                $role = $request->committee_role;
+                $flags = [
+                    'can_manage_budget' => in_array($role, ['CHAIRPERSON', 'TREASURER']),
+                    'can_manage_contributions' => in_array($role, ['CHAIRPERSON', 'TREASURER', 'SECRETARY']),
+                    'can_send_messages' => in_array($role, ['CHAIRPERSON', 'SECRETARY', 'COORDINATOR']),
+                    'can_manage_vendors' => in_array($role, ['CHAIRPERSON', 'COORDINATOR']),
+                    'can_scan_cards' => in_array($role, ['CHAIRPERSON', 'GATE_OFFICER']),
+                ];
+
+                // 8. CREATE MEMBER RECORD
+                $newMember = EventCommitteeMember::create(array_merge([
                     'id' => (string) Str::uuid(),
-                    'first_name' => $request->first_name,
-                    'last_name' => $request->last_name,
-                    'role' => 'COMMITTEE_MEMBER',
-                    'status' => 'ACTIVE',
-                    'password_hash' => Hash::make('password123'),
-                    'is_phone_verified' => true,
-                ]
-            );
+                    'event_id' => $eventId,
+                    'user_id' => $user->id,
+                    'committee_role' => $role,
+                    'added_by' => auth()->id(),
+                ], $flags));
 
-            // 5. Assign Base Spatie Role
-            if (!$user->hasAnyRole(['SUPER_ADMIN', 'ADMIN', 'HOST'])) {
-                $spatieRole = ($request->committee_role === 'GATE_OFFICER') ? 'GATE_OFFICER' : 'COMMITTEE_MEMBER';
-                $user->assignRole($spatieRole);
-            }
+                // Load user relationship while INSIDE the transaction to prevent 25P02 during resource transformation
+                $newMember->load('user');
 
-            // 6. Check for duplicates
-            $existing = EventCommitteeMember::where('event_id', $eventId)
-                ->where('user_id', $user->id)
-                ->first();
+                return $newMember;
+            });
 
-            if ($existing) {
-                return $this->errorResponse('User is already a committee member.', [], 409);
-            }
+            // 9. NOTIFICATIONS (OUTSIDE TRANSACTION)
+            try {
+                NotificationService::notify(
+                    $member->user,
+                    "Added to Committee",
+                    "You have been added to '{$event->event_name}' as a " . ucfirst(strtolower($member->committee_role)),
+                    ['icon' => 'Briefcase', 'event_id' => $eventId]
+                );
+            } catch (\Exception $e) {}
 
-            // 7. Define Role Flags
-            $role = $request->committee_role;
-            $flags = [
-                'can_manage_budget' => in_array($role, ['CHAIRPERSON', 'TREASURER']),
-                'can_manage_contributions' => in_array($role, ['CHAIRPERSON', 'TREASURER', 'SECRETARY']),
-                'can_send_messages' => in_array($role, ['CHAIRPERSON', 'SECRETARY', 'COORDINATOR']),
-                'can_manage_vendors' => in_array($role, ['CHAIRPERSON', 'COORDINATOR']),
-                'can_scan_cards' => in_array($role, ['CHAIRPERSON', 'GATE_OFFICER']),
-            ];
+            return $this->successResponse('Committee member added successfully', new CommitteeMemberResource($member), [], 201);
 
-            // 8. CREATE MEMBER RECORD
-            $member = EventCommitteeMember::create(array_merge([
-                'id' => (string) Str::uuid(),
-                'event_id' => $eventId,
-                'user_id' => $user->id,
-                'committee_role' => $role,
-                'added_by' => auth()->id(),
-            ], $flags));
-
-            // NOTIFY USER
-            NotificationService::notify(
-                $user,
-                "Added to Committee: " . $event->event_name,
-                "You have been added to the committee for '{$event->event_name}' as a " . ucfirst(strtolower($role)) . ".",
-                [
-                    'icon' => 'Briefcase', 
-                    'event_id' => $eventId, 
-                    'link' => "/events/{$eventId}"
-                ],
-                auth()->user()
-            );
-
-            return $this->successResponse('Committee member added successfully', $member, [], 201);
-        });
+        } catch (\Exception $e) {
+            return $this->errorResponse($e->getMessage() ?: 'Failed to add committee member.', [], 422);
+        }
     }
 
-    public function update(Request $request, $eventId, $id)
+    public function update(Request $request, string $eventId, string $id): JsonResponse
     {
         // 1. Validate Request
         $request->validate([
             'committee_role' => 'required|in:CHAIRPERSON,SECRETARY,TREASURER,COORDINATOR,MEMBER,GATE_OFFICER',
+            'can_manage_budget' => 'boolean',
+            'can_manage_contributions' => 'boolean',
+            'can_send_messages' => 'boolean',
+            'can_manage_vendors' => 'boolean',
+            'can_scan_cards' => 'boolean',
         ]);
 
         // 2. Fetch Member and Event
@@ -170,14 +205,14 @@ class EventCommitteeController extends Controller
             $user->assignRole($targetRole);
         }
 
-        // 5. Update Committee Member Record with Role Flags
+        // 5. Update Committee Member Record
         $member->update([
             'committee_role' => $role,
-            'can_manage_budget' => in_array($role, ['CHAIRPERSON', 'TREASURER']),
-            'can_manage_contributions' => in_array($role, ['CHAIRPERSON', 'TREASURER', 'SECRETARY']),
-            'can_send_messages' => in_array($role, ['CHAIRPERSON', 'SECRETARY', 'COORDINATOR']),
-            'can_manage_vendors' => in_array($role, ['CHAIRPERSON', 'COORDINATOR']),
-            'can_scan_cards' => in_array($role, ['CHAIRPERSON', 'GATE_OFFICER']),
+            'can_manage_budget' => $request->get('can_manage_budget', in_array($role, ['CHAIRPERSON', 'TREASURER'])),
+            'can_manage_contributions' => $request->get('can_manage_contributions', in_array($role, ['CHAIRPERSON', 'TREASURER', 'SECRETARY'])),
+            'can_send_messages' => $request->get('can_send_messages', in_array($role, ['CHAIRPERSON', 'SECRETARY', 'COORDINATOR'])),
+            'can_manage_vendors' => $request->get('can_manage_vendors', in_array($role, ['CHAIRPERSON', 'COORDINATOR'])),
+            'can_scan_cards' => $request->get('can_scan_cards', in_array($role, ['CHAIRPERSON', 'GATE_OFFICER'])),
         ]);
 
         // NOTIFY USER
@@ -193,10 +228,10 @@ class EventCommitteeController extends Controller
             auth()->user()
         );
 
-        return $this->successResponse('Committee member updated successfully', $member);
+        return $this->successResponse('Committee member updated successfully', new CommitteeMemberResource($member));
     }
 
-    public function destroy($eventId, $id)
+    public function destroy(string $eventId, string $id): JsonResponse
     {
         $member = EventCommitteeMember::where('event_id', $eventId)
             ->where('id', $id)
@@ -216,12 +251,9 @@ class EventCommitteeController extends Controller
         return $this->successResponse('Committee member removed successfully');
     }
 
-    public function export($eventId)
+    public function export(string $eventId)
     {
         $event = Event::findOrFail($eventId);
-        // Optional: Add authorization check here if needed
-        // $this->authorize('manageCommittee', $event);
-
         $members = EventCommitteeMember::where('event_id', $eventId)
             ->with('user')
             ->get();

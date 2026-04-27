@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import React, { Suspense } from 'react';
 import { ThemeProvider } from './context/ThemeContext'; 
-// <--- UPDATED IMPORT: Added useAuth
+import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext'; 
 import PrivateRoute from './components/PrivateRoute';
 import DashboardLayout from './components/DashboardLayout';
@@ -51,94 +51,96 @@ const SmartRedirect = () => {
 function App() {
   return (
     <ThemeProvider> 
-      <AuthProvider>
-        <Router>
-          <Routes>
-            {/* Public Route */}
-            <Route path="/login" element={<LoginPage />} />
+      <ToastProvider>
+        <AuthProvider>
+          <Router>
+            <Routes>
+              {/* Public Route */}
+              <Route path="/login" element={<LoginPage />} />
 
-            {/* Protected Routes Wrapper */}
-            <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
-              
-              {/* --- ROOT PATH: NOW USES SMART REDIRECT --- */}
-              {/* When user logs in or registers, they land here. 
-                  SmartRedirect checks their role and sends them to the correct dashboard. */}
-              <Route path="/" element={<SmartRedirect />} />
+              {/* Protected Routes Wrapper */}
+              <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
+                
+                {/* --- ROOT PATH: NOW USES SMART REDIRECT --- */}
+                {/* When user logs in or registers, they land here. 
+                    SmartRedirect checks their role and sends them to the correct dashboard. */}
+                <Route path="/" element={<SmartRedirect />} />
 
-              {/* --- HOST DASHBOARD --- */}
-              <Route path="/dashboard" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Dashboard...</div>}>
-                  <DashboardPage />
-                </Suspense>
-              } />
+                {/* --- HOST DASHBOARD --- */}
+                <Route path="/dashboard" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Dashboard...</div>}>
+                    <DashboardPage />
+                  </Suspense>
+                } />
 
-              {/* --- NOTIFICATIONS --- */}
-              <Route path="/notifications" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Notifications...</div>}>
-                  <NotificationsPage />
-                </Suspense>
-              } />
-              
-              {/* --- HOST PAGES --- */}
-              <Route path="/users" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Users...</div>}>
-                  <UsersPage />
-                </Suspense>
-              } />
-              <Route path="/profile" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Profile...</div>}>
-                  <ProfilePage />
-                </Suspense>
-              } />
+                {/* --- NOTIFICATIONS --- */}
+                <Route path="/notifications" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Notifications...</div>}>
+                    <NotificationsPage />
+                  </Suspense>
+                } />
+                
+                {/* --- HOST PAGES --- */}
+                <Route path="/users" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Users...</div>}>
+                    <UsersPage />
+                  </Suspense>
+                } />
+                <Route path="/profile" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Profile...</div>}>
+                    <ProfilePage />
+                  </Suspense>
+                } />
 
-              
-              <Route path="events" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Events...</div>}>
-                  <EventsPage />
-                </Suspense>
-              } />
-              <Route path="events/:id" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Event Details...</div>}>
-                  <EventDetailsPage />
-                </Suspense>
-              } />
+                
+                <Route path="events" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Events...</div>}>
+                    <EventsPage />
+                  </Suspense>
+                } />
+                <Route path="events/:id" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Event Details...</div>}>
+                    <EventDetailsPage />
+                  </Suspense>
+                } />
 
-              {/* --- HOST: VENDOR CATALOG --- */}
-              <Route path="/vendors" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Catalog...</div>}>
-                  <VendorCatalogPage />
-                </Suspense>
-              } />
-              
-              {/* --- VENDOR ROUTES --- */}
-              <Route path="/vendor/profile" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Profile...</div>}>
-                  <VendorProfilePage />
-                </Suspense>
-              } />
-              
-              <Route path="/vendor/dashboard" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Dashboard...</div>}>
-                  <VendorDashboardPage />
-                </Suspense>
-              } />
+                {/* --- HOST: VENDOR CATALOG --- */}
+                <Route path="/vendors" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Catalog...</div>}>
+                    <VendorCatalogPage />
+                  </Suspense>
+                } />
+                
+                {/* --- VENDOR ROUTES --- */}
+                <Route path="/vendor/profile" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Profile...</div>}>
+                    <VendorProfilePage />
+                  </Suspense>
+                } />
+                
+                <Route path="/vendor/dashboard" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendor Dashboard...</div>}>
+                    <VendorDashboardPage />
+                  </Suspense>
+                } />
 
-              <Route path="/vendor/bookings" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Bookings...</div>}>
-                  <VendorBookingsPage />
-                </Suspense>
-              } />
+                <Route path="/vendor/bookings" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Bookings...</div>}>
+                    <VendorBookingsPage />
+                  </Suspense>
+                } />
 
-              {/* --- ADMIN ROUTES --- */}
-              <Route path="/admin/vendors" element={
-                <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendors...</div>}>
-                  <AdminVendorsPage />
-                </Suspense>
-              } />
-            </Route>
-          </Routes>
-        </Router>
-      </AuthProvider>
+                {/* --- ADMIN ROUTES --- */}
+                <Route path="/admin/vendors" element={
+                  <Suspense fallback={<div className="p-10 text-center text-slate-500 dark:text-slate-400">Loading Vendors...</div>}>
+                    <AdminVendorsPage />
+                  </Suspense>
+                } />
+              </Route>
+            </Routes>
+          </Router>
+        </AuthProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

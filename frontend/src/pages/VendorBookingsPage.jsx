@@ -367,7 +367,13 @@ const VendorBookingsPage = () => {
 
     const openInquiryDoc = (inquiry) => {
         const isInvoice = ['QUOTED', 'ACCEPTED', 'COMPLETED'].includes(inquiry.status);
-        
+
+        // Fix: Use the bargain amount from metadata if the vendor has not quoted yet
+        const bargainAmount = inquiry.metadata?.target_amount || 0;
+        const currentQuote = (inquiry.last_quote_amount && parseFloat(inquiry.last_quote_amount) > 0) 
+            ? inquiry.last_quote_amount 
+            : 0;
+
         setSelectedDoc({
             type: isInvoice ? 'Service Invoice' : 'Service Inquiry',
             ref_number: `${isInvoice ? 'INV' : 'INQ'}-${inquiry.id.substring(0, 8).toUpperCase()}`,
@@ -376,15 +382,15 @@ const VendorBookingsPage = () => {
             recipient_label: isInvoice ? 'To: Event Host' : 'To: Service Provider',
             recipient_name: isInvoice ? inquiry.host_name : (data?.profile?.business_name || 'Verified Vendor'),
             service_name: inquiry.assigned_service,
-            description: inquiry.contract_notes,
-            amount: inquiry.last_quote_amount || inquiry.metadata?.target_amount || 0,
-            last_quote: inquiry.last_quote_amount,
+            description: inquiry.contract_notes || 'Official inquiry for event services.',
+            amount: currentQuote > 0 ? currentQuote : bargainAmount,
+            last_quote: currentQuote,
+            bargain_amount: bargainAmount,
             milestones: inquiry.metadata?.milestones || null,
             vendor_phone: data?.profile?.phone,
             is_paid: inquiry.status === 'COMPLETED'
         });
     };
-
     const openInvoice = (entry) => {
         const isLedger = entry.source_type === 'VENDOR_PAYMENT';
         const paymentId = isLedger ? entry.source_id : entry.id;

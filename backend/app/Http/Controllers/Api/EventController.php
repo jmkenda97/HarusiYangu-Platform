@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
@@ -12,12 +14,15 @@ use Illuminate\Validation\Rule;
 use App\Exports\CommitteeExport;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Services\NotificationService;
+use App\Http\Resources\EventResource;
+use Illuminate\Http\JsonResponse;
+use App\Traits\ApiResponse;
 
 class EventController extends Controller
 {
+    use ApiResponse;
 
-
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
         $user = $request->user();
 
@@ -45,15 +50,10 @@ class EventController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 20));
 
-        return $this->successResponse('Events fetched successfully', $events->items(), [
-            'page' => $events->currentPage(),
-            'per_page' => $events->perPage(),
-            'total' => $events->total(),
-            'total_pages' => $events->lastPage(),
-        ]);
+        return $this->paginatedResponse($events, EventResource::class, 'Events fetched successfully');
     }
 
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
         $request->validate([
             'event_name' => 'required|string|max:255',
@@ -68,15 +68,21 @@ class EventController extends Controller
             'venue_address' => 'nullable|string',
             'region' => 'nullable|string|max:100',
             'district' => 'nullable|string|max:100',
+            'ward' => 'nullable|string|max:100',
+            'google_map_link' => 'nullable|string|url',
+            'expected_guests' => 'nullable|integer|min:0',
             'target_budget' => 'required|numeric|min:0',
             'contingency_amount' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
+            'allow_public_registration' => 'boolean',
+            'require_contribution_before_card' => 'boolean',
+            'contribution_card_mode' => 'nullable|string|in:AUTO,MANUAL',
         ]);
 
         try {
             $event = DB::transaction(function () use ($request) {
                 $event = Event::create([
-                    'id' => Str::uuid(),
+                    'id' => (string) Str::uuid(),
                     'owner_user_id' => $request->user()->id,
                     'event_name' => $request->event_name,
                     'event_type' => $request->event_type,
@@ -90,15 +96,21 @@ class EventController extends Controller
                     'venue_address' => $request->venue_address,
                     'region' => $request->region,
                     'district' => $request->district,
+                    'ward' => $request->ward,
+                    'google_map_link' => $request->google_map_link,
+                    'expected_guests' => $request->expected_guests ?? 0,
                     'target_budget' => $request->target_budget,
                     'contingency_amount' => $request->contingency_amount ?? 0,
                     'description' => $request->description,
+                    'allow_public_registration' => $request->get('allow_public_registration', false),
+                    'require_contribution_before_card' => $request->get('require_contribution_before_card', false),
+                    'contribution_card_mode' => $request->get('contribution_card_mode', 'AUTO'),
                     'event_status' => 'DRAFT',
                     'currency_code' => 'TZS',
                 ]);
 
                 EventCommitteeMember::create([
-                    'id' => Str::uuid(),
+                    'id' => (string) Str::uuid(),
                     'event_id' => $event->id,
                     'user_id' => $request->user()->id,
                     'committee_role' => 'CHAIRPERSON',
@@ -126,14 +138,14 @@ class EventController extends Controller
                 $request->user()
             );
 
-            return $this->successResponse('Event created successfully', $event, [], 201);
+            return $this->successResponse('Event created successfully', new EventResource($event), [], 201);
         } catch (\Exception $e) {
             \Log::error('Event Creation Failed: ' . $e->getMessage());
             return $this->errorResponse('Failed to create event: ' . $e->getMessage(), [], 500);
         }
     }
 
-    public function show($id)
+    public function show(string $id): JsonResponse
     {
         $event = Event::with([
             'owner',
@@ -150,10 +162,10 @@ class EventController extends Controller
             return $this->errorResponse('Unauthorized', [], 403);
         }
 
-        return $this->successResponse('Event fetched successfully', $event);
+        return $this->successResponse('Event fetched successfully', new EventResource($event));
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, string $id): JsonResponse
     {
         $event = Event::whereNull('archived_at')->findOrFail($id);
         
@@ -166,6 +178,12 @@ class EventController extends Controller
             'event_status' => 'sometimes|required|string',
             'target_budget' => 'sometimes|required|numeric|min:0',
             'contingency_amount' => 'sometimes|required|numeric|min:0',
+            'ward' => 'sometimes|nullable|string|max:100',
+            'google_map_link' => 'sometimes|nullable|string|url',
+            'expected_guests' => 'sometimes|nullable|integer|min:0',
+            'allow_public_registration' => 'sometimes|boolean',
+            'require_contribution_before_card' => 'sometimes|boolean',
+            'contribution_card_mode' => 'sometimes|nullable|string|in:AUTO,MANUAL',
         ]);
 
         $event->update($request->all());
@@ -183,10 +201,10 @@ class EventController extends Controller
             auth()->user()
         );
 
-        return $this->successResponse('Event updated successfully', $event);
+        return $this->successResponse('Event updated successfully', new EventResource($event));
     }
 
-    public function destroy(Request $request, $id)
+    public function destroy(string $id): JsonResponse
     {
         $event = Event::whereNull('archived_at')->findOrFail($id);
 
@@ -212,7 +230,7 @@ class EventController extends Controller
     }
 
 
-    public function exportCommittee($eventId)
+    public function exportCommittee(string $eventId)
     {
         return Excel::download(new CommitteeExport($eventId), 'committee_export.xlsx');
     }

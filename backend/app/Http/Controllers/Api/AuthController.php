@@ -25,10 +25,32 @@ class AuthController extends Controller
 
         $phone = $this->normalizePhone($request->phone);
 
-        // Check if user is soft-deleted
+        // Check if user exists (including soft-deleted)
         $user = User::withTrashed()->where('phone', $phone)->first();
-        if ($user && $user->trashed()) {
-            return $this->errorResponse('Your account has been deactivated. Please contact administration for assistance.', [], 403);
+
+        // 1. BLOCK SUSPENDED OR DELETED USERS
+        if ($user) {
+            if ($user->trashed() || $user->status === 'SUSPENDED') {
+                return $this->errorResponse(
+                    'Your account has been deactivated or suspended. Please contact HarusiYangu administration for assistance.',
+                    ['status' => $user->status, 'is_deleted' => $user->trashed()],
+                    403
+                );
+            }
+        }
+
+        // Specific Error for Login if number doesn't exist
+        if ($request->purpose === 'LOGIN') {
+            if (!$user) {
+                return $this->errorResponse('Phone number not found. Please create an account first.', [], 404);
+            }
+        }
+
+        // Specific Error for Register if number already exists and is complete
+        if ($request->purpose === 'REGISTER') {
+            if ($user && $user->onboarding_completed) {
+                return $this->errorResponse('Phone number is already used. Please login instead.', [], 422);
+            }
         }
 
         $otp = rand(100000, 999999);
@@ -46,7 +68,7 @@ class AuthController extends Controller
         // In a real app, send via SMS gateway. For now, returning it for testing.
         return $this->successResponse('OTP sent successfully', [
             'phone' => $phone,
-            'expires_in_seconds' => 600,
+            'expires_in_seconds' => 300,
             'debug_otp' => $otp // REMOVE IN PRODUCTION
         ]);
     }
@@ -61,6 +83,16 @@ class AuthController extends Controller
 
         $phone = $this->normalizePhone($request->phone);
         $otpCode = $this->normalizeOtp($request->otp_code);
+
+        // 1. PRE-CHECK USER STATUS (Very Important)
+        $user = User::withTrashed()->where('phone', $phone)->first();
+        if ($user && ($user->trashed() || $user->status === 'SUSPENDED')) {
+            return $this->errorResponse(
+                'Access Denied. Your account is suspended or deleted. Contact administration.',
+                [],
+                403
+            );
+        }
 
         $verification = OtpVerification::where('phone', $phone)
             ->where('otp_code', $otpCode)
@@ -77,85 +109,32 @@ class AuthController extends Controller
 
         // If LOGIN, find user and issue token
         if ($request->purpose === 'LOGIN') {
-            $user = User::where('phone', $phone)->first();
             if (!$user) {
                 return $this->errorResponse('User not found. Please register.', [], 404);
             }
 
-            $token = $user->createToken('auth_token')->plainTextToken;
+            $accessToken = $user->createToken('access_token', ['*'], now()->addMinutes(60))->plainTextToken;
+            $refreshToken = $user->createToken('refresh_token', ['*'], now()->addDays(1))->plainTextToken;
+
             return $this->successResponse('Login successful', [
                 'user' => new UserResource($user),
-                'access_token' => $token,
-                'refresh_token' => 'jwt_refresh_token_placeholder', // TODO: Implement real refresh token
+                'access_token' => $accessToken,
+                'refresh_token' => $refreshToken,
                 'expires_in' => 3600,
-                'token_type' => 'Bearer'
             ]);
         }
 
-        return $this->successResponse('Phone verified successfully');
+        return $this->successResponse('Phone verified successfully', ['phone' => $phone]);
     }
 
     public function requestRegistrationOtp(Request $request)
     {
-        $request->validate([
-            'phone' => 'required|string',
-        ]);
-
-        $phone = $this->normalizePhone($request->phone);
-
-        // Check if user is soft-deleted
-        $user = User::withTrashed()->where('phone', $phone)->first();
-        if ($user && $user->trashed()) {
-            return $this->errorResponse('Your account has been deactivated. Please contact administration for assistance.', [], 403);
-        }
-
-        // Check if user already exists
-        if ($user) {
-            return $this->errorResponse('User already exists. Please login.', [], 422);
-        }
-
-        $otp = rand(100000, 999999);
-
-        OtpVerification::updateOrCreate(
-            ['phone' => $phone, 'purpose' => 'REGISTER'],
-            [
-                'otp_code' => $otp,
-                'expires_at' => Carbon::now()->addMinutes(10),
-                'is_used' => false,
-            ]
-        );
-
-        return $this->successResponse('OTP sent successfully', [
-            'phone' => $phone,
-            'expires_in_seconds' => 600,
-            'debug_otp' => $otp // REMOVE IN PRODUCTION
-        ]);
+        return $this->requestOtp($request->merge(['purpose' => 'REGISTER']));
     }
 
     public function verifyRegistrationOtp(Request $request)
     {
-        $request->validate([
-            'phone' => 'required|string',
-            'otp_code' => 'required|string',
-        ]);
-
-        $phone = $this->normalizePhone($request->phone);
-        $otpCode = $this->normalizeOtp($request->otp_code);
-
-        $verification = OtpVerification::where('phone', $phone)
-            ->where('otp_code', $otpCode)
-            ->where('purpose', 'REGISTER')
-            ->where('is_used', false)
-            ->where('expires_at', '>', Carbon::now())
-            ->first();
-
-        if (!$verification) {
-            return $this->errorResponse('Invalid or expired OTP', [], 422);
-        }
-
-        $verification->update(['is_used' => true]);
-
-        return $this->successResponse('Phone verified successfully', ['phone' => $phone]);
+        return $this->verifyOtp($request->merge(['purpose' => 'REGISTER']));
     }
 
     public function completeRegistration(Request $request)
@@ -176,8 +155,9 @@ class AuthController extends Controller
 
         $phone = $this->normalizePhone($request->phone);
 
-        if (User::where('phone', $phone)->exists()) {
-            return $this->errorResponse('User already exists. Please login.', [], 422);
+        $user = User::where('phone', $phone)->first();
+        if ($user && $user->onboarding_completed) {
+            return $this->errorResponse('Phone number is already used. Please login instead.', [], 422);
         }
 
         // Ensure phone was verified
@@ -187,67 +167,75 @@ class AuthController extends Controller
             ->first();
 
         if (!$verification) {
-            return $this->errorResponse('Phone not verified', [], 403);
+            return $this->errorResponse('Phone not verified. Please request OTP first.', [], 403);
         }
 
         try {
-            return DB::transaction(function () use ($request, $verification, $phone) {
-                $user = User::create([
-                    'id' => (string) \Str::uuid(),
-                    'phone' => $phone,
-                    'role' => $request->role,
-                    'first_name' => $request->first_name,
-                    'middle_name' => $request->middle_name,
-                    'last_name' => $request->last_name,
-                    'email' => $request->email,
-                    'password_hash' => Hash::make($request->password),
-                    'profile_photo_url' => $request->profile_photo_url,
-                    'onboarding_completed' => true,
-                    'is_phone_verified' => true,
-                    'status' => 'ACTIVE',
-                ]);
+            return DB::transaction(function () use ($request, $verification, $phone, $user) {
+                // Use updateOrCreate to handle existing incomplete accounts
+                $user = User::updateOrCreate(
+                    ['phone' => $phone],
+                    [
+                        'id' => $user ? $user->id : (string) \Str::uuid(),
+                        'role' => $request->role,
+                        'first_name' => $request->first_name,
+                        'middle_name' => $request->middle_name,
+                        'last_name' => $request->last_name,
+                        'email' => $request->email,
+                        'password_hash' => Hash::make($request->password),
+                        'profile_photo_url' => $request->profile_photo_url,
+                        'onboarding_completed' => true,
+                        'is_phone_verified' => true,
+                        'status' => 'ACTIVE',
+                    ]
+                );
 
                 // Assign Role
-                $user->assignRole($request->role);
+                $user->syncRoles([$request->role]);
 
                 // Create Vendor Profile if role is VENDOR
                 if ($user->role === 'VENDOR') {
-                    $vendor = \App\Models\Vendor::create([
-                        'id' => (string) \Str::uuid(),
-                        'user_id' => $user->id,
-                        'full_name' => $user->first_name . ' ' . $user->last_name,
-                        'business_name' => $request->business_name,
-                        'phone' => $user->phone,
-                        'email' => $user->email,
-                        'service_type' => $request->service_type,
-                        'address' => $request->address ?? null,
-                        'min_price' => $request->min_price ?? 0,
-                        'max_price' => $request->max_price ?? null,
-                        'status' => 'PENDING_APPROVAL',
-                    ]);
+                    $vendor = \App\Models\Vendor::updateOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'id' => (string) \Str::uuid(),
+                            'full_name' => $user->first_name . ' ' . $user->last_name,
+                            'business_name' => $request->business_name,
+                            'phone' => $user->phone,
+                            'email' => $user->email,
+                            'service_type' => $request->service_type,
+                            'address' => $request->address ?? null,
+                            'min_price' => $request->min_price ?? 0,
+                            'max_price' => $request->max_price ?? null,
+                            'status' => 'PENDING_APPROVAL',
+                        ]
+                    );
 
                     // Initialize Vendor Wallet
-                    \App\Models\VendorWallet::create([
-                        'id' => (string) \Str::uuid(),
-                        'vendor_id' => $vendor->id,
-                        'available_balance' => 0,
-                        'pending_balance' => 0,
-                        'total_earnings' => 0,
-                    ]);
+                    \App\Models\VendorWallet::firstOrCreate(
+                        ['vendor_id' => $vendor->id],
+                        [
+                            'id' => (string) \Str::uuid(),
+                            'available_balance' => 0,
+                            'pending_balance' => 0,
+                            'total_earnings' => 0,
+                        ]
+                    );
 
                     // Create Default Service
-                    $defaultService = \App\Models\VendorService::create([
-                        'id' => (string) \Str::uuid(),
-                        'vendor_id' => $vendor->id,
-                        'service_name' => ucfirst(str_replace('_', ' ', strtolower($request->service_type))),
-                        'service_type' => $request->service_type,
-                        'description' => 'Professional ' . strtolower(str_replace('_', ' ', $request->service_type)) . ' services',
-                        'min_price' => $request->min_price ?? 0,
-                        'max_price' => $request->max_price ?? null,
-                        'price_unit' => 'per_event',
-                        'is_available' => false,
-                        'is_verified' => false,
-                    ]);
+                    $defaultService = \App\Models\VendorService::updateOrCreate(
+                        ['vendor_id' => $vendor->id, 'service_type' => $request->service_type],
+                        [
+                            'id' => (string) \Str::uuid(),
+                            'service_name' => ucfirst(str_replace('_', ' ', strtolower($request->service_type))),
+                            'description' => 'Professional ' . strtolower(str_replace('_', ' ', $request->service_type)) . ' services',
+                            'min_price' => $request->min_price ?? 0,
+                            'max_price' => $request->max_price ?? null,
+                            'price_unit' => 'per_event',
+                            'is_available' => false,
+                            'is_verified' => false,
+                        ]
+                    );
 
                     // Handle Documents
                     if ($request->hasFile('business_license')) {
@@ -263,13 +251,11 @@ class AuthController extends Controller
                         $this->createVendorDocument($vendor->id, 'TIN_CERTIFICATE', $path, $request->file('tin_certificate'), $defaultService->id);
                     }
 
-                    // Send Email notification for vendor registration
+                    // Send Email notification
                     if ($user->email) {
                         try {
                             Mail::to($user->email)->send(new \App\Mail\VendorStatusChange($user, 'PENDING_APPROVAL', "We have received your documents and are reviewing them."));
-                        } catch (\Exception $e) {
-                            \Log::error('Mail sending failed: ' . $e->getMessage());
-                        }
+                        } catch (\Exception $e) {}
                     }
 
                     // NOTIFY ADMINS
@@ -280,21 +266,61 @@ class AuthController extends Controller
                     );
                 }
 
-                $token = $user->createToken('auth_token')->plainTextToken;
+                $accessToken = $user->createToken('access_token', ['*'], now()->addMinutes(60))->plainTextToken;
+                $refreshToken = $user->createToken('refresh_token', ['*'], now()->addDays(1))->plainTextToken;
                 $verification->delete();
 
-                return $this->successResponse('Registration complete!', [
+                return $this->successResponse('Account created successfully', [
                     'user' => new UserResource($user),
-                    'access_token' => $token,
-                    'refresh_token' => 'jwt_refresh_token_placeholder',
+                    'access_token' => $accessToken,
+                    'refresh_token' => $refreshToken,
                     'expires_in' => 3600,
-                    'token_type' => 'Bearer'
                 ]);
             });
         } catch (\Exception $e) {
             \Log::error('Registration Error: ' . $e->getMessage());
-            return $this->errorResponse('Registration failed. Please try again later.', ['error' => $e->getMessage()], 500);
+            return $this->errorResponse('Registration failed. Please try again.', [], 500);
         }
+    }
+
+    public function refresh(Request $request)
+    {
+        $request->validate([
+            'refresh_token' => 'required|string',
+        ]);
+
+        $tokenParts = explode('|', $request->refresh_token);
+        $tokenId = $tokenParts[0] ?? null;
+
+        if (!$tokenId) {
+            return $this->errorResponse('Invalid refresh token format', [], 401);
+        }
+
+        $tokenModel = DB::table('personal_access_tokens')->where('id', $tokenId)->first();
+
+        if (!$tokenModel || $tokenModel->name !== 'refresh_token') {
+            return $this->errorResponse('Invalid refresh token', [], 401);
+        }
+
+        if ($tokenModel->expires_at && Carbon::parse($tokenModel->expires_at)->isPast()) {
+            return $this->errorResponse('Refresh token expired', [], 401);
+        }
+
+        $user = User::withTrashed()->find($tokenModel->tokenable_id);
+        if (!$user || $user->trashed() || $user->status === 'SUSPENDED') {
+            return $this->errorResponse('Access Denied. Your account is suspended or deleted.', [], 403);
+        }
+
+        $user->tokens()->delete();
+
+        $accessToken = $user->createToken('access_token', ['*'], now()->addMinutes(60))->plainTextToken;
+        $refreshToken = $user->createToken('refresh_token', ['*'], now()->addDays(1))->plainTextToken;
+
+        return $this->successResponse('Token refreshed successfully', [
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshToken,
+            'expires_in' => 3600,
+        ]);
     }
 
     public function logout(Request $request)

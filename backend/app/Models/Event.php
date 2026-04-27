@@ -127,4 +127,22 @@ class Event extends Model
     {
         return $this->hasOne(EventWallet::class, 'event_id');
     }
+
+    /**
+     * Total money collected (from Wallet)
+     * Spec 4.2
+     */
+    public function getTotalCollectedAttribute(): float
+    {
+        return (float) ($this->wallet->total_inflow ?? 0);
+    }
+
+    /**
+     * Total outstanding pledges
+     * Spec 4.2
+     */
+    public function getTotalOutstandingAttribute(): float
+    {
+        return (float) $this->pledges()->where('contribution_status', '!=', 'CANCELLED')->sum('outstanding_amount');
+    }
 }

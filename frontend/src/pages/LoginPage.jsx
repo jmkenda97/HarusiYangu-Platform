@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import api from '../api/axios';
 import { Lock, Phone, ArrowRight, RefreshCw, User, Mail, Image, Check, X as CloseIcon, Shield, CreditCard, Users, Menu, ChevronRight, ChevronLeft, Zap, Globe, Clock, Store, Briefcase, Upload, FileText, AlertCircle, DollarSign } from 'lucide-react';
 
@@ -30,15 +31,9 @@ const getErrorMessage = (error, fallback) => {
     const apiError = error.response?.data?.error;
     const fieldErrors = error.response?.data?.errors;
 
-    
     if (fieldErrors && typeof fieldErrors === 'object') {
         const firstFieldError = Object.values(fieldErrors).flat()[0];
         if (firstFieldError) return firstFieldError;
-    }
-
-    // Prioritize specific error details if the message is too generic
-    if (apiMessage === 'Registration failed. Please try again later.' && apiError) {
-        return apiError;
     }
 
     return apiMessage || apiError || fallback;
@@ -79,6 +74,7 @@ const LandingPage = () => {
     const [imagePreview, setImagePreview] = useState(null);
 
     const { login, setUser } = useAuth();
+    const { showToast } = useToast();
     const navigate = useNavigate();
 
     // --- SLIDER LOGIC ---
@@ -94,7 +90,7 @@ const LandingPage = () => {
     }, []);
 
     const resetForm = () => {
-        setStep(1); setMessage(''); setPhone(''); setOtp('');
+        setStep(1); setPhone(''); setOtp('');
         setAccountType('HOST');
         setFormData({
             first_name: '', middle_name: '', last_name: '', email: '',
@@ -126,93 +122,93 @@ const LandingPage = () => {
     };
 
     const handleRequestOtp = async (e) => {
-        e.preventDefault(); setLoading(true); setMessage('');
+        e.preventDefault(); setLoading(true);
         try {
             const normalizedPhone = normalizePhone(phone);
 
             if (normalizedPhone.length < 10) {
-                setMessage('Enter a valid phone number.');
+                showToast('Enter a valid phone number.', 'error');
                 return;
             }
 
+            let res;
             if (authMode === 'register') {
-                const payload = { phone: normalizedPhone, role: accountType };
-                const res = await api.post('/auth/register-otp', payload);
-                if (res.data.success) {
-                    setPhone(normalizedPhone);
-                    setStep(2); setMessage(`OTP sent! (Code: ${res.data.data.debug_otp})`);
-                }
+                const payload = { phone: normalizedPhone, role: accountType, purpose: 'REGISTER' };
+                res = await api.post('/auth/request-otp', payload);
             } else {
-                const res = await api.post('/auth/request-otp', { phone: normalizedPhone, purpose: 'LOGIN' });
-                if (res.data.success) {
-                    setPhone(normalizedPhone);
-                    setStep(2); setMessage(`OTP sent! (Code: ${res.data.data.debug_otp})`);
-                }
+                res = await api.post('/auth/request-otp', { phone: normalizedPhone, purpose: 'LOGIN' });
+            }
+
+            if (res.data.success) {
+                setPhone(normalizedPhone);
+                setStep(2); 
+                // Display OTP inside the form message box
+                setMessage(`OTP sent successfully! Your code is: ${res.data.data.debug_otp}`);
+                showToast('Verification code sent to your phone.', 'success');
             }
         } catch (err) {
-            setMessage(getErrorMessage(err, 'Failed to send OTP'));
+            showToast(getErrorMessage(err, 'Failed to send OTP'), 'error');
         } finally { setLoading(false); }
     };
 
-
-    // REPLACE THIS FUNCTION
     const handleVerifyOtp = async (e) => {
-        e.preventDefault(); setLoading(true); setMessage('');
+        e.preventDefault(); setLoading(true);
         try {
             const normalizedPhone = normalizePhone(phone);
             const normalizedOtp = normalizeOtp(otp);
 
             if (normalizedPhone.length < 10) {
-                setMessage('Enter a valid phone number.');
+                showToast('Enter a valid phone number.', 'error');
                 return;
             }
 
             if (normalizedOtp.length !== 6) {
-                setMessage('Enter the full 6-digit OTP code.');
+                showToast('Enter the full 6-digit OTP code.', 'error');
                 return;
             }
 
             if (authMode === 'register') {
-                const res = await api.post('/auth/verify-register-otp', {
+                const res = await api.post('/auth/verify-otp', {
                     phone: normalizedPhone,
                     otp_code: normalizedOtp,
+                    purpose: 'REGISTER'
                 });
 
                 if (res.data.success) {
                     setPhone(normalizedPhone);
                     setOtp(normalizedOtp);
                     setStep(3);
-                    setMessage('Phone verified! Please complete your profile.');
+                    showToast('Phone verified! Please complete your profile.', 'success');
                 }
             } else {
                 const result = await login(normalizedPhone, normalizedOtp);
                 if (result.success) {
+                    showToast('Welcome back! Successfully logged in.', 'success');
                     handleCloseAuth();
-                    // Navigate to dashboard immediately (role-based redirect handled by AuthContext)
                     const storedUser = JSON.parse(localStorage.getItem('harusiyangu_user'));
                     if (storedUser?.role === 'VENDOR') {
                         navigate('/vendor/dashboard', { replace: true });
                     } else {
                         navigate('/dashboard', { replace: true });
                     }
+                } else {
+                    showToast(result.message || 'Login failed. Please check your credentials.', 'error');
                 }
             }
         } catch (err) {
-            setMessage(getErrorMessage(err, 'Invalid or expired OTP'));
+            showToast(getErrorMessage(err, 'Invalid or expired OTP'), 'error');
         }
         finally { setLoading(false); }
     };
 
-    // REPLACE THIS FUNCTION
     const handleCompleteProfile = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setMessage('');
         try {
             const normalizedPhone = normalizePhone(phone);
 
             if (normalizedPhone.length < 10) {
-                setMessage('Phone number is missing. Please go back and verify your phone again.');
+                showToast('Phone number is missing.', 'error');
                 return;
             }
 
@@ -224,7 +220,7 @@ const LandingPage = () => {
                 last_name: formData.last_name,
                 email: formData.email,
                 password: formData.password,
-                password_confirmation: formData.password_confirmation,
+                password_confirmation: formData.password,
                 profile_photo_url: formData.profile_photo_url,
             };
 
@@ -250,34 +246,27 @@ const LandingPage = () => {
                     if (!isNaN(maxP)) dataPayload.append('max_price', maxP);
                 }
                 
-                // REQUIRED DOCUMENTS
                 if (files.business_license) dataPayload.append('business_license', files.business_license);
                 if (files.brela_certificate) dataPayload.append('brela_certificate', files.brela_certificate);
                 if (files.tin_certificate) dataPayload.append('tin_certificate', files.tin_certificate);
 
                 res = await api.post('/auth/complete-registration', dataPayload, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
+                    headers: { 'Content-Type': 'multipart/form-data' },
                 });
             } else {
                 res = await api.post('/auth/complete-registration', basePayload);
             }
 
             if (res.data.success) {
-                const { token, user } = res.data.data;
+                const { access_token, user } = res.data.data;
 
-                // 1. Save the NEW real token and user data
-                localStorage.setItem('harusiyangu_token', token);
+                localStorage.setItem('harusiyangu_token', access_token);
                 localStorage.setItem('harusiyangu_user', JSON.stringify(user));
 
-                // 2. Update auth context immediately (NO PAGE RELOAD)
                 setUser(user);
-
-                // 3. Close the modal
+                showToast('Account created successfully! Welcome to HarusiYangu.', 'success');
                 handleCloseAuth();
 
-                // 4. Navigate to appropriate dashboard based on role (FAST, no reload)
                 if (user.role === 'VENDOR') {
                     navigate('/vendor/dashboard', { replace: true });
                 } else {
@@ -285,8 +274,7 @@ const LandingPage = () => {
                 }
             }
         } catch (error) {
-            console.error(error);
-            setMessage(getErrorMessage(error, 'Failed to save profile.'));
+            showToast(getErrorMessage(error, 'Failed to complete registration.'), 'error');
         }
         finally { setLoading(false); }
     };
@@ -298,11 +286,6 @@ const LandingPage = () => {
             <nav className="fixed w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-sm">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                        {/* <div className="w-10 h-10 bg-[#1e3a8a] rounded-lg flex items-center justify-center text-white font-serif text-xl font-bold shadow-md">H</div>
-                        <div className="flex flex-col">
-                            <span className="text-xl font-bold tracking-tight text-slate-900 leading-none">HarusiYangu</span>
-                            <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Event Platform</span>
-                        </div> */}
                     </div>
                     <div className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-600">
                         <a href="#features" className="hover:text-blue-900 transition-colors">Features</a>
@@ -486,7 +469,13 @@ const LandingPage = () => {
                                         <span className="text-sm text-slate-500">Already have an account? <button onClick={() => handleSwitchMode('login')} className="text-blue-900 font-bold hover:underline">Log In</button></span>
                                     }
                                 </div>
-                                {message && <div className={`p-4 rounded-xl mb-6 text-sm font-medium flex items-center gap-3 ${message.includes('sent') || message.includes('verified') || message.includes('Welcome') ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>{message.includes('suspended') ? <Lock size={16} /> : <Check size={16} />}<span>{message}</span></div>}
+
+                                {message && (
+                                    <div className="p-4 rounded-xl mb-6 bg-blue-50 text-blue-700 border border-blue-100 text-sm font-medium flex items-center gap-3 animate-pulse">
+                                        <Zap size={16} />
+                                        <span>{message}</span>
+                                    </div>
+                                )}
 
                                 {step === 1 && (
                                     <div className="animate-fade-in-up">
@@ -729,11 +718,6 @@ const LandingPage = () => {
                     </div>
                     <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
                         <p className="text-slate-500 text-sm">&copy; {new Date().getFullYear()} HarusiYangu. All rights reserved.</p>
-                        <div className="flex gap-4">
-                            <div className="w-8 h-8 bg-slate-800 rounded-full hover:bg-slate-700 cursor-pointer transition-colors"></div>
-                            <div className="w-8 h-8 bg-slate-800 rounded-full hover:bg-slate-700 cursor-pointer transition-colors"></div>
-                            <div className="w-8 h-8 bg-slate-800 rounded-full hover:bg-slate-700 cursor-pointer transition-colors"></div>
-                        </div>
                     </div>
                 </div>
             </footer>
