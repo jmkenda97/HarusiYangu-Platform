@@ -53,7 +53,10 @@ class NotificationService
                 }
             }
 
-            // 3. Log the message for future SMS/WhatsApp integration
+            // 3. SMS / Phone Message (Current: Log, Future: API Hook)
+            self::sendSMS($receiver->phone, $content);
+
+            // 4. Log the message for future SMS/WhatsApp integration
             MessageLog::create([
                 'sender_id' => $sender ? $sender->id : null,
                 'receiver_id' => $receiver->id,
@@ -70,6 +73,20 @@ class NotificationService
             Log::error('Notification failed: ' . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * SMS Gateway Hook
+     * Prepared for real API integration later.
+     */
+    public static function sendSMS(string $phone, string $message)
+    {
+        Log::info("--- [SMS NOTIFICATION LOG] ---");
+        Log::info("TO: {$phone}");
+        Log::info("MESSAGE: {$message}");
+        Log::info("---------------------------------");
+
+        // TODO: Plug in real SMS API here (Beem, Twilio, etc.)
     }
 
     /**
