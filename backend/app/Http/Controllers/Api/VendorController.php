@@ -162,6 +162,9 @@ class VendorController extends Controller
 
         $wallet = \App\Models\VendorWallet::where('vendor_id', $vendor->id)->first();
 
+        $payoutAccounts = \App\Models\VendorPayoutAccount::where('vendor_id', $vendor->id)
+            ->get();
+
         $payments = \App\Models\VendorPayment::with(['event'])
             ->where('vendor_id', $vendor->id)
             ->orderBy('payment_date', 'desc')
@@ -180,6 +183,7 @@ class VendorController extends Controller
                 'pending_balance' => $wallet ? $wallet->pending_balance : 0,
                 'total_earnings' => $wallet ? $wallet->total_earnings : 0,
             ],
+            'payout_accounts' => $payoutAccounts,
         ]);
     }
 }

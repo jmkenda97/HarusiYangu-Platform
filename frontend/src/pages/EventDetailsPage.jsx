@@ -160,15 +160,57 @@ const EventDetailsPage = () => {
                             <div className="space-y-1">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">{senderLabel}</p>
                                 <p className="font-black text-slate-900 dark:text-white text-base">{senderName}</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{isNegotiation ? (event?.event_name || 'Private Event') : 'Verified Marketplace Partner'}</p>
+                                <p className="text-xs text-brand-600 dark:text-brand-400 font-bold leading-relaxed flex items-center gap-1.5"><Phone size={12} /> {doc.vendor_phone || 'Verified Marketplace Vendor'}</p>
                             </div>
                             <div className="text-right space-y-1">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-1 mb-2">{recipientLabel}</p>
                                 <p className="font-black text-slate-900 dark:text-white text-base">{recipientName}</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{isNegotiation ? 'Professional Vendor' : (event?.event_name || 'Private Event')}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">HarusiYangu User</p>
                             </div>
                         </div>
 
+                        {/* Milestones Schedule (Dates + Amounts) */}
+                        {doc.milestones && (
+                            <div className="space-y-4">
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Calendar size={14} className="text-brand-600" /> Milestone Payment Schedule
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {Object.entries(doc.milestones).filter(([k]) => k.startsWith('phase')).map(([key, phase]) => (
+                                        <div key={key} className="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <p className="text-[9px] font-black text-slate-400 uppercase">{phase.name}</p>
+                                                <p className="text-[8px] font-bold text-brand-600 uppercase">{phase.due_date ? `Due: ${new Date(phase.due_date).toLocaleDateString('en-GB')}` : 'Immediate'}</p>
+                                            </div>
+                                            <p className="text-lg font-black text-slate-900 dark:text-white leading-none mb-2">{formatCurrency(phase.amount)}</p>
+                                            <p className="text-[9px] text-slate-500 leading-relaxed font-medium italic">"{phase.description}"</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* All Vendor Payout Accounts */}
+                        {doc.payout_accounts && doc.payout_accounts.length > 0 && (
+                            <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 shadow-inner">
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <Wallet size={14} className="text-emerald-600" /> Official Payout Options
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {doc.payout_accounts.map((acc, idx) => (
+                                        <div key={idx} className="flex items-start gap-3 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
+                                            {acc.is_primary && <div className="absolute top-0 right-0 px-2 py-0.5 bg-emerald-500 text-white text-[7px] font-black uppercase rounded-bl-lg">Primary</div>}
+                                            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-600 font-bold text-[10px] uppercase">{acc.provider?.substring(0, 2)}</div>
+                                            <div className="space-y-0.5 min-w-0">
+                                                <p className="text-[7px] font-black text-slate-400 uppercase leading-none">{acc.type} - {acc.provider}</p>
+                                                <p className="text-xs font-black text-slate-900 dark:text-white truncate">{acc.account_name}</p>
+                                                <p className="text-xs font-mono font-black text-emerald-600 select-all">{acc.account_number}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         {/* Itemized Breakdown Section */}
                         <div className="space-y-4">
                             <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-3 flex justify-between rounded-t-xl border-x border-t border-slate-200 dark:border-slate-800">
@@ -644,7 +686,8 @@ const EventDetailsPage = () => {
 
     // --- VENDOR FUNCTIONS ---
     const openRFQ = (v) => {
-        const notesParts = (v.contract_notes || '').split("\n\nQuote Response: ");
+        // Splitting by 'Invoice Note: ' which is used in the backend
+        const notesParts = (v.contract_notes || '').split("\n\nInvoice Note: ");
         const hostBargainDesc = notesParts[0];
         const vendorQuoteDesc = notesParts[1] || '';
         const isInvoice = ['QUOTED', 'ACCEPTED', 'COMPLETED'].includes(v.status);
@@ -659,13 +702,16 @@ const EventDetailsPage = () => {
             recipient_label: isInvoice ? 'To: Event Host' : 'To: Service Provider',
             recipient_name: isInvoice ? hostFullName : v.vendor?.business_name,
             service_name: v.assigned_service,
-            description: hostBargainDesc || 'Service inquiry following verified catalog standards.',
+            // Capture all details
+            description: hostBargainDesc || 'Host inquiry notes.',
             vendor_description: vendorQuoteDesc,
             amount: hostOffer,
             last_quote: v.last_quote_amount,
+            bargain_amount: hostOffer,
             milestones: v.metadata?.milestones || null,
             vendor_phone: v.vendor?.phone,
-            is_paid: v.status === 'COMPLETED'
+            is_paid: v.status === 'COMPLETED',
+            payout_accounts: v.metadata?.milestones?.payout_accounts || []
         });
     };
 

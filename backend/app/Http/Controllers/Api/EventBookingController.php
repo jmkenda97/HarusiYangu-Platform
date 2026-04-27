@@ -92,23 +92,39 @@ class EventBookingController extends Controller
             return $this->errorResponse('Unauthorized.', [], 403);
         }
 
-        // Check if vendor has a primary payout account
-        $primaryAccount = \App\Models\VendorPayoutAccount::where('vendor_id', $booking->vendor_id)
-            ->where('is_primary', true)
-            ->first();
+        // Fetch ALL payout accounts for the vendor
+        $payoutAccounts = \App\Models\VendorPayoutAccount::where('vendor_id', $booking->vendor_id)
+            ->get();
 
-        if (!$primaryAccount) {
-            return $this->errorResponse('Please set up a primary payout account (Bank or Mobile Money) before sending an invoice.', [
-                'payout_account' => ['A primary payout account is required for invoices.']
+        if ($payoutAccounts->isEmpty()) {
+            return $this->errorResponse('Please set up at least one payout account (Bank or Mobile Money) before sending an invoice.', [
+                'payout_account' => ['A payout account is required for invoices.']
             ], 422);
         }
 
-        // Automatically structure the 30/30/40 Milestones in metadata
+        // Calculate Milestone Dates based on the Event Date
+        $eventDate = \Carbon\Carbon::parse($booking->event->event_date);
+        
+        // Phase 1: Immediate (Deposit)
+        $phase1Date = now()->format('Y-m-d');
+        
+        // Phase 2: Interim (14 days before event, or halfway between now and event if less than 14 days)
+        $daysUntilEvent = now()->diffInDays($eventDate, false);
+        if ($daysUntilEvent > 14) {
+            $phase2Date = $eventDate->copy()->subDays(14)->format('Y-m-d');
+        } else {
+            $phase2Date = now()->addDays(max(1, floor($daysUntilEvent / 2)))->format('Y-m-d');
+        }
+        
+        // Phase 3: Final (Event Date)
+        $phase3Date = $eventDate->format('Y-m-d');
+
         $milestones = [
             'phase_1' => [
                 'name' => 'Deposit (30%)',
                 'percentage' => 30,
                 'amount' => $request->quote_amount * 0.30,
+                'due_date' => $phase1Date,
                 'description' => 'Required immediately to lock the vendor and the date.',
                 'status' => 'PENDING'
             ],
@@ -116,23 +132,27 @@ class EventBookingController extends Controller
                 'name' => 'Interim (30%)',
                 'percentage' => 30,
                 'amount' => $request->quote_amount * 0.30,
-                'description' => 'Due closer to the event for material and logistical preparation.',
+                'due_date' => $phase2Date,
+                'description' => 'Due closer to the event for preparation.',
                 'status' => 'PENDING'
             ],
             'phase_3' => [
                 'name' => 'Final (40%)',
                 'percentage' => 40,
                 'amount' => $request->quote_amount * 0.40,
-                'description' => 'Escrow payment. Released after service delivery confirmation.',
+                'due_date' => $phase3Date,
+                'description' => 'Final escrow release upon service delivery.',
                 'status' => 'PENDING'
             ],
-            'payment_instructions' => [
-                'account_name' => $primaryAccount->account_name,
-                'provider' => $primaryAccount->provider_name,
-                'account_number' => $primaryAccount->account_number,
-                'vendor_phone' => $booking->vendor->phone,
-                'type' => $primaryAccount->account_type
-            ]
+            'payout_accounts' => $payoutAccounts->map(function($acc) {
+                return [
+                    'type' => $acc->account_type,
+                    'provider' => $acc->provider_name,
+                    'account_name' => $acc->account_name,
+                    'account_number' => $acc->account_number,
+                    'is_primary' => $acc->is_primary
+                ];
+            })
         ];
 
         $booking->update([
@@ -142,11 +162,11 @@ class EventBookingController extends Controller
             'metadata' => array_merge($booking->metadata ?? [], ['milestones' => $milestones])
         ]);
 
-        // Notify Host
+        // Notify Host with clear milestone info
         NotificationService::notify(
             $booking->event->owner,
-            "New Invoice Received",
-            $booking->vendor->business_name . " has sent a detailed milestone invoice for TZS " . number_format($request->quote_amount) . ".",
+            "Detailed Invoice Received",
+            $booking->vendor->business_name . " has sent an invoice for TZS " . number_format($request->quote_amount) . " with a 30/30/40 milestone plan.",
             [
                 'icon' => 'FileText', 
                 'event_id' => $booking->event_id, 
