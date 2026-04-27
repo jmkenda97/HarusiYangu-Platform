@@ -30,6 +30,7 @@ const getErrorMessage = (error, fallback) => {
     const apiError = error.response?.data?.error;
     const fieldErrors = error.response?.data?.errors;
 
+    
     if (fieldErrors && typeof fieldErrors === 'object') {
         const firstFieldError = Object.values(fieldErrors).flat()[0];
         if (firstFieldError) return firstFieldError;
@@ -101,7 +102,7 @@ const LandingPage = () => {
             business_name: '', service_type: 'CATERING', address: ''
         });
         setFiles({ business_license: null, brela_certificate: null, tin_certificate: null });
-        setImagePreview(null);
+        setImagePreview(null); 
     };
 
     const handleOpenAuth = (mode) => { setAuthMode(mode); resetForm(); setIsAuthModalOpen(true); };
